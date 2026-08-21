@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
 import { StackingAI } from '../ai';
 import { SeededAnimalQueue, StabilityDetector, resolveFallOutcome } from '../core';
-import type { Actor, AnimalId, MatchPhase, StackBodySnapshot } from '../core';
-import { getAnimalDefinition } from '../data';
-import type { AnimalDefinition } from '../data/animals';
+import type { Actor, AnimalId, GameLanguage, MatchPhase, StackBodySnapshot } from '../core';
+import { ANIMALS, getAnimalCopy, getAnimalDefinition } from '../data';
+import type { AnimalDefinition, AnimalRole } from '../data/animals';
 import type { GameCommand, GamePhase, GameSnapshot } from '../../ui/gameBridge';
-import { ANIMALS as UI_ANIMALS } from '../../ui/gameBridge';
+import { getAnimalPreview } from '../../ui/gameBridge';
 import { GameAudio } from '../audio/GameAudio';
 
 const GAME_WIDTH = 390;
@@ -21,6 +21,15 @@ const PLAYFIELD_MAX_X = GAME_WIDTH - 34;
 const FALL_BOUNDARY_Y = GAME_HEIGHT + 75;
 const MOVE_SPEED = 150;
 const ROTATION_STEP = 1;
+const AIM_GUIDE_COLORS: Readonly<Record<AnimalRole, number>> = {
+  foundation: 0x5f843c,
+  bridge: 0xd28a35,
+  filler: 0x6bb5c7,
+  balancer: 0x8b6fb2,
+  challenge: 0xf05d42,
+};
+
+type ResultReason = 'fell' | 'unstable' | 'danger';
 
 interface SceneHooks {
   publish(snapshot: GameSnapshot): void;
@@ -119,6 +128,7 @@ export class StackimalsScene extends Phaser.Scene {
   private stability = new StabilityDetector();
   private records: StackimalRecord[] = [];
   private preview: Phaser.GameObjects.Image | null = null;
+  private aimGuide: Phaser.GameObjects.Graphics | null = null;
   private currentAnimal: AnimalId = 'rabbit';
   private actor: Actor = 'player';
   private phase: MatchPhase = 'ready';
@@ -127,7 +137,9 @@ export class StackimalsScene extends Phaser.Scene {
   private scorePlayer = 0;
   private scoreAi = 0;
   private winner: Actor | null = null;
-  private resultMessage = '';
+  private resultReason: ResultReason | null = null;
+  private placedAnimalNotice: AnimalId | null = null;
+  private language: GameLanguage = 'zh';
   private moveLeft = false;
   private moveRight = false;
   private dragPointerId: number | null = null;
@@ -146,8 +158,8 @@ export class StackimalsScene extends Phaser.Scene {
   }
 
   preload(): void {
-    for (const animal of Object.values(UI_ANIMALS)) {
-      this.load.image(`animal-${animal.id}`, animal.assetUrl);
+    for (const animal of ANIMALS) {
+      this.load.image(animal.assetKey, animal.texturePath);
     }
     this.load.image('platform', '/assets/game/environment/platform.webp');
   }
@@ -171,7 +183,8 @@ export class StackimalsScene extends Phaser.Scene {
     if (this.phase === 'aiming' && this.actor === 'player' && this.preview !== null) {
       const direction = Number(this.moveRight) - Number(this.moveLeft);
       if (direction !== 0) {
-        this.setPreviewX(this.preview.x + direction * MOVE_SPEED * Math.min(delta, 34) / 1000);
+        const handling = getAnimalDefinition(this.currentAnimal).gameplay.moveSpeedMultiplier;
+        this.setPreviewX(this.preview.x + direction * MOVE_SPEED * handling * Math.min(delta, 34) / 1000);
       }
     }
 
@@ -181,6 +194,12 @@ export class StackimalsScene extends Phaser.Scene {
   }
 
   handleCommand(command: GameCommand): void {
+    if (command.type === 'setLanguage') {
+      this.language = command.language;
+      this.publish();
+      return;
+    }
+
     if (command.type === 'restart') {
       this.restartMatch();
       return;
@@ -231,6 +250,7 @@ export class StackimalsScene extends Phaser.Scene {
     this.stability = new StabilityDetector();
     this.records = [];
     this.preview = null;
+    this.aimGuide = null;
     this.actor = 'player';
     this.phase = 'ready';
     this.paused = false;
@@ -238,7 +258,8 @@ export class StackimalsScene extends Phaser.Scene {
     this.scorePlayer = 0;
     this.scoreAi = 0;
     this.winner = null;
-    this.resultMessage = '';
+    this.resultReason = null;
+    this.placedAnimalNotice = null;
     this.moveLeft = false;
     this.moveRight = false;
     this.dragPointerId = null;
@@ -254,6 +275,8 @@ export class StackimalsScene extends Phaser.Scene {
     for (let x = 12; x < GAME_WIDTH - 12; x += 22) {
       danger.lineBetween(x, DANGER_Y, Math.min(x + 11, GAME_WIDTH - 12), DANGER_Y);
     }
+
+    this.aimGuide = this.add.graphics().setDepth(4);
 
     this.add.image(PLATFORM_X, PLATFORM_Y + 5, 'platform')
       .setDisplaySize(330, 106)
@@ -322,6 +345,7 @@ export class StackimalsScene extends Phaser.Scene {
       .setOrigin(definition.collision.textureOrigin.x, definition.collision.textureOrigin.y)
       .setDepth(9);
     this.preview.setAlpha(actor === 'player' ? 1 : 0.88);
+    this.drawAimGuide();
     this.publish();
 
     if (actor === 'ai') {
@@ -370,6 +394,40 @@ export class StackimalsScene extends Phaser.Scene {
     this.preview.x = minimumX <= maximumX
       ? Phaser.Math.Clamp(value, minimumX, maximumX)
       : PLATFORM_X;
+    this.drawAimGuide();
+  }
+
+  private drawAimGuide(): void {
+    const guide = this.aimGuide;
+    guide?.clear();
+    if (guide === null || this.preview === null || this.actor !== 'player' || this.phase !== 'aiming') {
+      return;
+    }
+
+    const definition = getAnimalDefinition(this.currentAnimal);
+    const bounds = rotatedCollisionXBounds(definition, this.preview.angle);
+    const footprintMinX = this.preview.x + bounds.minX;
+    const footprintMaxX = this.preview.x + bounds.maxX;
+    let landingY = PLATFORM_Y - PLATFORM_BODY_HEIGHT / 2;
+
+    for (const record of this.records) {
+      const bodyBounds = record.body.bounds;
+      const overlapsFootprint = bodyBounds.max.x >= footprintMinX && bodyBounds.min.x <= footprintMaxX;
+      if (overlapsFootprint) {
+        landingY = Math.min(landingY, bodyBounds.min.y);
+      }
+    }
+
+    const color = AIM_GUIDE_COLORS[definition.gameplay.role];
+    const lineStartY = this.preview.y + 22;
+    guide.lineStyle(2, color, 0.38);
+    for (let y = lineStartY; y < landingY - 7; y += 12) {
+      guide.lineBetween(this.preview.x, y, this.preview.x, Math.min(y + 6, landingY - 7));
+    }
+    guide.fillStyle(color, 0.2);
+    guide.fillRoundedRect(footprintMinX, landingY - 4, footprintMaxX - footprintMinX, 8, 4);
+    guide.lineStyle(2, color, 0.58);
+    guide.strokeRoundedRect(footprintMinX, landingY - 4, footprintMaxX - footprintMinX, 8, 4);
   }
 
   private rotatePreview(direction: -1 | 1): void {
@@ -404,6 +462,8 @@ export class StackimalsScene extends Phaser.Scene {
     const angle = this.preview.angle;
     this.preview.destroy();
     this.preview = null;
+    this.aimGuide?.clear();
+    this.placedAnimalNotice = null;
     const record = this.spawnPhysicsAnimal(this.currentAnimal, this.actor, x, y, angle);
     this.records.push(record);
     this.currentDropId = record.id;
@@ -500,7 +560,7 @@ export class StackimalsScene extends Phaser.Scene {
       })),
     });
     if (outcome !== null) {
-      this.finishMatch(outcome.winner, '动物从平台上掉下去了');
+      this.finishMatch(outcome.winner, 'fell');
       return;
     }
 
@@ -511,7 +571,7 @@ export class StackimalsScene extends Phaser.Scene {
     }
 
     if (stability.state === 'timed-out') {
-      this.finishMatch(this.actor === 'player' ? 'ai' : 'player', '动物一直没有站稳');
+      this.finishMatch(this.actor === 'player' ? 'ai' : 'player', 'unstable');
       return;
     }
 
@@ -521,8 +581,13 @@ export class StackimalsScene extends Phaser.Scene {
 
     const towerCrossedDanger = this.records.some((record) => record.body.bounds.min.y < DANGER_Y);
     if (towerCrossedDanger) {
-      this.finishMatch(this.actor === 'player' ? 'ai' : 'player', '动物塔超过了红色危险线');
+      this.finishMatch(this.actor === 'player' ? 'ai' : 'player', 'danger');
       return;
+    }
+
+    const placedRecord = this.records.find((record) => record.id === this.currentDropId);
+    if (placedRecord !== undefined) {
+      this.placedAnimalNotice = placedRecord.animalId;
     }
 
     this.records = this.records.map((record) => ({ ...record, isCurrentDrop: false }));
@@ -558,17 +623,16 @@ export class StackimalsScene extends Phaser.Scene {
     };
   }
 
-  private finishMatch(winner: Actor, message: string): void {
+  private finishMatch(winner: Actor, reason: ResultReason): void {
     if (this.phase === 'game-over') {
       return;
     }
     this.phase = 'game-over';
     this.winner = winner;
-    this.resultMessage = winner === 'player'
-      ? `${message}，Milo 本回合失败。`
-      : `${message}，这一回合由 Milo 获胜。`;
+    this.resultReason = reason;
     this.moveLeft = false;
     this.moveRight = false;
+    this.aimGuide?.clear();
     this.cancelAiWork();
     this.matter.world.pause();
     this.audio.play(winner === 'player' ? 'win' : 'lose');
@@ -616,29 +680,62 @@ export class StackimalsScene extends Phaser.Scene {
   private publish(): void {
     const phase = toUiPhase(this.phase, this.actor, this.paused);
     const uiActor = toUiActor(this.actor);
-    let message = this.resultMessage;
-    if (message.length === 0) {
+    const animalCopy = getAnimalCopy(this.currentAnimal, this.language);
+    let message = '';
+    if (this.resultReason !== null && this.winner !== null) {
+      const reasonCopy = this.language === 'zh'
+        ? {
+            fell: '动物从平台上掉下去了',
+            unstable: '动物一直没有站稳',
+            danger: '动物塔超过了红色危险线',
+          }[this.resultReason]
+        : {
+            fell: 'An animal fell off the platform',
+            unstable: 'The animal could not find its balance',
+            danger: 'The tower crossed the red danger line',
+          }[this.resultReason];
+      message = this.language === 'zh'
+        ? this.winner === 'player'
+          ? `${reasonCopy}，Milo 本回合失败。`
+          : `${reasonCopy}，这一回合由 Milo 获胜。`
+        : this.winner === 'player'
+          ? `${reasonCopy}. Milo loses this round.`
+          : `${reasonCopy}. Milo wins this round.`;
+    } else {
       if (phase === 'humanAiming') {
-        message = '拖动动物选择落点，再旋转或投放';
+        message = `${animalCopy.trait} · ${animalCopy.tip}`;
       } else if (phase === 'humanSettling') {
-        message = '稳住，稳住…';
+        message = this.language === 'zh'
+          ? `${animalCopy.name}正在寻找平衡…`
+          : `${animalCopy.name} is finding its balance…`;
       } else if (phase === 'aiThinking') {
-        message = 'Milo 正在观察动物塔…';
+        const aiCopy = this.language === 'zh'
+          ? 'Milo 正在观察动物塔…'
+          : 'Milo is studying the animal tower…';
+        if (this.placedAnimalNotice !== null) {
+          const placed = getAnimalCopy(this.placedAnimalNotice, this.language);
+          message = this.language === 'zh'
+            ? `${placed.name}：${placed.settledCopy} · ${aiCopy}`
+            : `${placed.name}: ${placed.settledCopy} · ${aiCopy}`;
+        } else {
+          message = aiCopy;
+        }
       } else if (phase === 'aiSettling') {
-        message = 'Milo 的动物正在落下';
+        message = this.language === 'zh' ? 'Milo 的动物正在落下' : "Milo's animal is falling";
       }
     }
 
     this.hooks.publish({
+      language: this.language,
       phase,
       turn: uiActor,
       round: this.round,
       scoreHuman: this.scorePlayer,
       scoreAi: this.scoreAi,
       message,
-      currentAnimal: UI_ANIMALS[this.currentAnimal],
-      upcomingHuman: this.playerQueue.preview(3).map((id) => UI_ANIMALS[id]),
-      upcomingAi: this.aiQueue.preview(3).map((id) => UI_ANIMALS[id]),
+      currentAnimal: getAnimalPreview(this.currentAnimal, this.language),
+      upcomingHuman: this.playerQueue.preview(3).map((id) => getAnimalPreview(id, this.language)),
+      upcomingAi: this.aiQueue.preview(3).map((id) => getAnimalPreview(id, this.language)),
       winner: this.winner === null ? null : toUiActor(this.winner),
     });
   }

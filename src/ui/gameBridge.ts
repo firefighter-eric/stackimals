@@ -1,12 +1,7 @@
-export type AnimalId =
-  | 'bear'
-  | 'bird'
-  | 'cat'
-  | 'fox'
-  | 'hedgehog'
-  | 'rabbit'
-  | 'raccoon'
-  | 'turtle';
+import { ANIMAL_IDS, type AnimalId, type GameLanguage } from '../game/core/types';
+import { ANIMAL_CATALOG, getAnimalCopy } from '../game/data/animals';
+
+export type { AnimalId, GameLanguage };
 
 export type GameActor = 'human' | 'ai';
 
@@ -24,9 +19,13 @@ export interface AnimalPreview {
   id: AnimalId;
   name: string;
   assetUrl: string;
+  sizeLabel: string;
+  trait: string;
+  tip: string;
 }
 
 export interface GameSnapshot {
+  language: GameLanguage;
   phase: GamePhase;
   turn: GameActor;
   round: number;
@@ -45,7 +44,8 @@ export type GameCommand =
   | { type: 'drop' }
   | { type: 'pause' }
   | { type: 'resume' }
-  | { type: 'restart' };
+  | { type: 'restart' }
+  | { type: 'setLanguage'; language: GameLanguage };
 
 export interface GameBridge {
   mount(
@@ -55,58 +55,37 @@ export interface GameBridge {
   dispatch(command: GameCommand): void;
 }
 
-export const ANIMALS: Record<AnimalId, AnimalPreview> = {
-  bear: {
-    id: 'bear',
-    name: '小熊',
-    assetUrl: '/assets/game/animals/bear.webp',
-  },
-  bird: {
-    id: 'bird',
-    name: '蓝鸟',
-    assetUrl: '/assets/game/animals/bird.webp',
-  },
-  cat: {
-    id: 'cat',
-    name: '橘猫',
-    assetUrl: '/assets/game/animals/cat.webp',
-  },
-  fox: {
-    id: 'fox',
-    name: '狐狸',
-    assetUrl: '/assets/game/animals/fox.webp',
-  },
-  hedgehog: {
-    id: 'hedgehog',
-    name: '刺猬',
-    assetUrl: '/assets/game/animals/hedgehog.webp',
-  },
-  rabbit: {
-    id: 'rabbit',
-    name: '兔子',
-    assetUrl: '/assets/game/animals/rabbit.webp',
-  },
-  raccoon: {
-    id: 'raccoon',
-    name: '浣熊',
-    assetUrl: '/assets/game/animals/raccoon.webp',
-  },
-  turtle: {
-    id: 'turtle',
-    name: '乌龟',
-    assetUrl: '/assets/game/animals/turtle.webp',
-  },
-};
+export function getAnimalPreview(id: AnimalId, language: GameLanguage): AnimalPreview {
+  const animal = ANIMAL_CATALOG[id];
+  const copy = getAnimalCopy(id, language);
+  return {
+    id,
+    name: copy.name,
+    assetUrl: animal.texturePath,
+    sizeLabel: copy.sizeLabel,
+    trait: copy.trait,
+    tip: copy.tip,
+  };
+}
 
-export const INITIAL_GAME_SNAPSHOT: GameSnapshot = {
-  phase: 'loading',
-  turn: 'human',
-  round: 1,
-  scoreHuman: 0,
-  scoreAi: 0,
-  message: '正在准备动物积木…',
-  currentAnimal: ANIMALS.rabbit,
-  upcomingHuman: [ANIMALS.hedgehog, ANIMALS.turtle, ANIMALS.bird],
-  upcomingAi: [ANIMALS.cat, ANIMALS.raccoon, ANIMALS.rabbit],
-  winner: null,
-};
+export const ANIMALS = Object.fromEntries(ANIMAL_IDS.map((id) => (
+  [id, getAnimalPreview(id, 'zh')]
+))) as Record<AnimalId, AnimalPreview>;
+
+export function createInitialGameSnapshot(language: GameLanguage): GameSnapshot {
+  return {
+    language,
+    phase: 'loading',
+    turn: 'human',
+    round: 1,
+    scoreHuman: 0,
+    scoreAi: 0,
+    message: '',
+    currentAnimal: getAnimalPreview('rabbit', language),
+    upcomingHuman: ['hedgehog', 'turtle', 'bird'].map((id) => getAnimalPreview(id as AnimalId, language)),
+    upcomingAi: ['cat', 'raccoon', 'rabbit'].map((id) => getAnimalPreview(id as AnimalId, language)),
+    winner: null,
+  };
+}
+
+export const INITIAL_GAME_SNAPSHOT: GameSnapshot = createInitialGameSnapshot('zh');

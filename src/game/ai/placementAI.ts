@@ -68,6 +68,11 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function angularDistance(left: number, right: number): number {
+  const difference = Math.abs(((left - right + 180) % 360 + 360) % 360 - 180);
+  return Math.min(difference, 180);
+}
+
 function mergeSpans(spans: readonly HorizontalSpan[], maxGap = 4): HorizontalSpan[] {
   const sorted = [...spans].sort((left, right) => left.minX - right.minX);
   const merged: Array<{ minX: number; maxX: number }> = [];
@@ -170,6 +175,8 @@ function candidateScore(
   platform: HorizontalSpan,
   playfield: HorizontalSpan,
   animalArea: number,
+  preferredAngles: readonly number[],
+  orientationWeight: number,
   random: SeededRandom,
 ): { score: number; supportRatio: number } {
   const halfWidth = candidate.width / 2;
@@ -190,6 +197,10 @@ function candidateScore(
   const broadSideScore = candidate.width / Math.max(candidate.width, candidate.height);
   const sideMargin = Math.min(footprint.minX - playfield.minX, playfield.maxX - footprint.maxX);
   const marginScore = clamp(sideMargin / Math.max(width(playfield) * 0.18, 1), 0, 1);
+  const closestPreferredAngle = Math.min(
+    ...preferredAngles.map((angle) => angularDistance(candidate.angle, angle)),
+  );
+  const preferredOrientationScore = 1 - clamp(closestPreferredAngle / 90, 0, 1);
 
   return {
     score: supportRatio * 5
@@ -198,6 +209,7 @@ function candidateScore(
       + balanceScore * 1.8
       + broadSideScore * 0.65
       + marginScore * 0.35
+      + preferredOrientationScore * orientationWeight
       + random.next() * 0.025,
     supportRatio,
   };
@@ -259,7 +271,16 @@ export function chooseAIPlacement(
   let best: AIPlacementDecision | undefined;
   const animalArea = animal.display.width * animal.display.height;
   for (const candidate of candidates) {
-    const result = candidateScore(candidate, analysis, context.platform, playfield, animalArea, random);
+    const result = candidateScore(
+      candidate,
+      analysis,
+      context.platform,
+      playfield,
+      animalArea,
+      animal.gameplay.preferredAngles,
+      animal.gameplay.aiOrientationWeight,
+      random,
+    );
     if (best === undefined || result.score > best.score) {
       best = {
         x: candidate.x,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { analyzeStack, chooseAIPlacement, rotatedDisplaySize } from '../game/ai/placementAI';
-import type { StackBodySnapshot } from '../game/core/types';
+import { ANIMAL_IDS, type StackBodySnapshot } from '../game/core/types';
 import { getAnimalDefinition } from '../game/data/animals';
 
 const bodies: readonly StackBodySnapshot[] = [
@@ -72,5 +72,20 @@ describe('chooseAIPlacement', () => {
     expect(decision.usedFallback).toBe(true);
     expect(decision.x).toBe(10);
     expect(getAnimalDefinition('bear').allowedAngles).toContain(decision.angle);
+  });
+
+  it('uses every animal in a posture that matches its play style', () => {
+    for (const animalId of ANIMAL_IDS) {
+      const animal = getAnimalDefinition(animalId);
+      const decision = chooseAIPlacement({
+        animalId,
+        bodies: [],
+        platform: { minX: 48, maxX: 342 },
+        playfield: { minX: 34, maxX: 356 },
+      }, `featured-${animalId}`);
+
+      expect(animal.gameplay.preferredAngles).toContain(decision.angle);
+      expect(decision.usedFallback).toBe(false);
+    }
   });
 });

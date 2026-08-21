@@ -14,12 +14,21 @@ export const ACTORS = ['player', 'ai'] as const;
 
 export type Actor = (typeof ACTORS)[number];
 
+export const GAME_LANGUAGES = ['zh', 'en'] as const;
+
+export type GameLanguage = (typeof GAME_LANGUAGES)[number];
+
 export const ANIMAL_IDS = [
   'bear',
   'bird',
   'cat',
+  'crocodile',
+  'elephant',
   'fox',
+  'frog',
+  'giraffe',
   'hedgehog',
+  'penguin',
   'rabbit',
   'raccoon',
   'turtle',

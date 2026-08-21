@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import type { GameBridge, GameCommand, GameSnapshot } from './gameBridge';
-import { INITIAL_GAME_SNAPSHOT } from './gameBridge';
+import type { GameBridge, GameCommand, GameLanguage, GameSnapshot } from './gameBridge';
+import { createInitialGameSnapshot, getAnimalPreview } from './gameBridge';
 import { GameControls } from './GameControls';
 import { GameHud } from './GameHud';
 import { GameModal } from './GameModal';
+import { copyFor, readStoredLanguage, storeLanguage } from './i18n';
 
 interface GameShellProps {
   bridge: GameBridge;
@@ -18,40 +19,48 @@ function isPlayablePhase(phase: GameSnapshot['phase']) {
   return phase === 'humanAiming';
 }
 
-function statusCopy(snapshot: GameSnapshot) {
+function statusCopy(snapshot: GameSnapshot, language: GameLanguage) {
   if (snapshot.message) {
     return snapshot.message;
   }
 
+  const copy = copyFor(language);
   switch (snapshot.phase) {
     case 'loading':
-      return '正在准备动物积木…';
+      return copy.loadingStatus;
     case 'humanAiming':
-      return '拖动动物选择落点';
+      return copy.aimStatus;
     case 'humanSettling':
-      return '稳住，稳住…';
+      return copy.humanSettlingStatus;
     case 'aiThinking':
-      return 'Milo 正在观察动物塔…';
+      return copy.aiThinkingStatus;
     case 'aiSettling':
-      return 'Milo 的动物正在落下';
+      return copy.aiSettlingStatus;
     case 'paused':
-      return '游戏已暂停';
+      return copy.pausedStatus;
     case 'gameOver':
-      return snapshot.winner === 'human' ? '漂亮的动物塔！' : '再试一次吧！';
+      return snapshot.winner === 'human' ? copy.humanWinStatus : copy.aiWinStatus;
     case 'error':
-      return '游戏暂时无法继续';
+      return copy.errorStatus;
   }
 }
 
 export function GameShell({ bridge }: GameShellProps) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const snapshotRef = useRef<GameSnapshot>(INITIAL_GAME_SNAPSHOT);
+  const [language, setLanguage] = useState<GameLanguage>(() => readStoredLanguage());
+  const initialSnapshotRef = useRef<GameSnapshot>(createInitialGameSnapshot(language));
+  const snapshotRef = useRef<GameSnapshot>(initialSnapshotRef.current);
+  const languageRef = useRef(language);
   const restartConfirmationRef = useRef(false);
-  const [snapshot, setSnapshot] = useState<GameSnapshot>(INITIAL_GAME_SNAPSHOT);
+  const animalRosterRef = useRef(false);
+  const [snapshot, setSnapshot] = useState<GameSnapshot>(initialSnapshotRef.current);
   const [restartConfirmationOpen, setRestartConfirmationOpen] = useState(false);
+  const [animalRosterOpen, setAnimalRosterOpen] = useState(false);
 
   snapshotRef.current = snapshot;
+  languageRef.current = language;
   restartConfirmationRef.current = restartConfirmationOpen;
+  animalRosterRef.current = animalRosterOpen;
 
   useEffect(() => {
     const mountNode = mountRef.current;
@@ -62,14 +71,28 @@ export function GameShell({ bridge }: GameShellProps) {
     try {
       return bridge.mount(mountNode, setSnapshot);
     } catch (error) {
-      const message = error instanceof Error ? error.message : '未知错误';
+      const copy = copyFor(languageRef.current);
+      const message = error instanceof Error ? error.message : copy.unknownError;
       setSnapshot((current) => ({
         ...current,
         phase: 'error',
-        message: `游戏启动失败：${message}`,
+        message: copy.startupFailed(message),
       }));
     }
   }, [bridge]);
+
+  useEffect(() => {
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+    storeLanguage(language);
+    setSnapshot((current) => ({
+      ...current,
+      language,
+      currentAnimal: getAnimalPreview(current.currentAnimal.id, language),
+      upcomingHuman: current.upcomingHuman.map((animal) => getAnimalPreview(animal.id, language)),
+      upcomingAi: current.upcomingAi.map((animal) => getAnimalPreview(animal.id, language)),
+    }));
+    bridge.dispatch({ type: 'setLanguage', language });
+  }, [bridge, language]);
 
   useEffect(() => {
     const activeDirections = new Set<-1 | 1>();
@@ -83,12 +106,23 @@ export function GameShell({ bridge }: GameShellProps) {
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Escape' && animalRosterRef.current) {
+        event.preventDefault();
+        if (!event.repeat) {
+          setAnimalRosterOpen(false);
+        }
+        return;
+      }
+
       if (isInteractiveTarget(event.target)) {
         return;
       }
 
       const current = snapshotRef.current;
-      const canControl = isPlayablePhase(current.phase) && !restartConfirmationRef.current;
+      const canControl =
+        isPlayablePhase(current.phase) &&
+        !restartConfirmationRef.current &&
+        !animalRosterRef.current;
 
       if (event.code === 'Escape' || event.code === 'KeyP') {
         event.preventDefault();
@@ -169,40 +203,47 @@ export function GameShell({ bridge }: GameShellProps) {
     };
   }, [bridge]);
 
-  const canControl = isPlayablePhase(snapshot.phase) && !restartConfirmationOpen;
+  const canControl = isPlayablePhase(snapshot.phase) && !restartConfirmationOpen && !animalRosterOpen;
   const requestRestart = () => setRestartConfirmationOpen(true);
+  const resumeGame = () => {
+    setAnimalRosterOpen(false);
+    bridge.dispatch({ type: 'resume' });
+  };
   const confirmRestart = () => {
     setRestartConfirmationOpen(false);
+    setAnimalRosterOpen(false);
     bridge.dispatch({ type: 'restart' });
   };
+  const copy = copyFor(language);
 
   return (
     <main className="app-viewport">
-      <section className="game-shell" aria-label="Stackimals 游戏">
-        <GameHud snapshot={snapshot} onPause={() => bridge.dispatch({ type: 'pause' })} />
+      <section className="game-shell" aria-label={copy.appLabel}>
+        <GameHud snapshot={snapshot} language={language} onPause={() => bridge.dispatch({ type: 'pause' })} />
 
         <div className="game-stage" data-game-phase={snapshot.phase}>
           <div
             ref={mountRef}
             className="game-stage__mount"
             id="stackimals-game"
-            aria-label="动物堆叠游戏区域"
+            aria-label={copy.stageLabel}
           />
 
           {snapshot.phase === 'loading' && (
             <div className="loading-indicator" role="status">
               <span aria-hidden="true" />
-              正在召集动物…
+              {copy.loading}
             </div>
           )}
 
           <div className={`stage-message stage-message--${snapshot.turn}`} aria-live="polite">
             <span aria-hidden="true" />
-            {statusCopy(snapshot)}
+            {statusCopy(snapshot, language)}
           </div>
         </div>
 
         <GameControls
+          language={language}
           enabled={canControl}
           onRotate={(direction) => bridge.dispatch({ type: 'rotate', direction })}
           onDrop={() => bridge.dispatch({ type: 'drop' })}
@@ -211,16 +252,21 @@ export function GameShell({ bridge }: GameShellProps) {
         <GameModal
           snapshot={snapshot}
           restartConfirmationOpen={restartConfirmationOpen}
-          onResume={() => bridge.dispatch({ type: 'resume' })}
+          animalRosterOpen={animalRosterOpen}
+          language={language}
+          onResume={resumeGame}
+          onOpenAnimalRoster={() => setAnimalRosterOpen(true)}
+          onCloseAnimalRoster={() => setAnimalRosterOpen(false)}
           onRequestRestart={requestRestart}
           onCancelRestart={() => setRestartConfirmationOpen(false)}
           onConfirmRestart={confirmRestart}
+          onLanguageChange={setLanguage}
         />
 
         <div className="rotate-device" role="status">
           <span aria-hidden="true">↻</span>
-          <strong>请竖屏游玩</strong>
-          <small>这样动物们有更多空间往上堆</small>
+          <strong>{copy.portraitTitle}</strong>
+          <small>{copy.portraitBody}</small>
         </div>
       </section>
     </main>
