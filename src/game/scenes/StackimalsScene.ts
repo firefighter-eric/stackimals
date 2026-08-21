@@ -318,7 +318,7 @@ export class StackimalsScene extends Phaser.Scene {
 
     const definition = getAnimalDefinition(this.currentAnimal);
     this.preview = this.add.image(PLATFORM_X, AIM_Y, definition.assetKey)
-      .setDisplaySize(definition.display.width, definition.display.height)
+      .setScale(definition.displayScale)
       .setOrigin(definition.collision.textureOrigin.x, definition.collision.textureOrigin.y)
       .setDepth(9);
     this.preview.setAlpha(actor === 'player' ? 1 : 0.88);
@@ -425,7 +425,9 @@ export class StackimalsScene extends Phaser.Scene {
     const image = this.matter.add.image(x, y, definition.assetKey, undefined, {
       label: `stackimals-${animalId}`,
     });
-    image.setDisplaySize(definition.display.width, definition.display.height);
+    // Keep the render and temporary default Matter body on one uniform scale.
+    // The alpha-derived outline body installed below already uses that scale.
+    image.setScale(definition.displayScale);
 
     const body = this.createOutlineBody(definition, x, y, angleDeg);
     image.setExistingBody(body, true);

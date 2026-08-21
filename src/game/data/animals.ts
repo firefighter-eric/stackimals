@@ -1,7 +1,7 @@
 import { ANIMAL_IDS, type AnimalId } from '../core/types';
 import {
   createCollisionGeometry,
-  displaySizeForArea,
+  displaySizeForWidth,
   type CollisionFit,
   type CollisionGeometry,
   type PixelVertex,
@@ -25,7 +25,9 @@ export interface AnimalDefinition {
   readonly texturePath: `/assets/game/animals/${AnimalId}.webp`;
   /** The encoded WebP canvas, before Phaser display scaling. */
   readonly sourceSize: Size;
-  /** Logical display size; always the exact source WebP aspect ratio. */
+  /** One-axis render scale used for both axes to prevent sprite distortion. */
+  readonly displayScale: number;
+  /** Logical display size; derived from displayScale on both axes. */
   readonly display: Size;
   readonly physics: {
     readonly density: number;
@@ -45,14 +47,16 @@ const ANGLES_45 = [-135, -90, -45, 0, 45, 90, 135, 180] as const;
 
 function animalGeometry(
   sourceSize: Size,
-  targetArea: number,
+  targetWidth: number,
   sourceAlphaBounds: RectBounds,
   sourceOutline: readonly PixelVertex[],
   fit: CollisionFit,
-): Pick<AnimalDefinition, 'sourceSize' | 'display' | 'collision'> {
-  const display = displaySizeForArea(sourceSize, targetArea);
+): Pick<AnimalDefinition, 'sourceSize' | 'displayScale' | 'display' | 'collision'> {
+  const displayScale = targetWidth / sourceSize.width;
+  const display = displaySizeForWidth(sourceSize, targetWidth);
   return {
     sourceSize,
+    displayScale,
     display,
     collision: createCollisionGeometry({
       sourceSize,
@@ -69,10 +73,13 @@ function animalGeometry(
  * tolerance. Coordinates below are source pixel-edge coordinates; the helper
  * scales them into each definition's displayed-texture coordinate system.
  */
-const GEOMETRY: Readonly<Record<AnimalId, Pick<AnimalDefinition, 'sourceSize' | 'display' | 'collision'>>> = {
+const GEOMETRY: Readonly<Record<
+  AnimalId,
+  Pick<AnimalDefinition, 'sourceSize' | 'displayScale' | 'display' | 'collision'>
+>> = {
   bear: animalGeometry(
     { width: 600, height: 397 },
-    98 * 82,
+    148,
     { minX: 60, minY: 5, maxX: 598, maxY: 374 },
     [
       [60, 159], [80, 91], [127, 49], [347, 41], [360, 17], [385, 5], [417, 12], [432, 32],
@@ -84,7 +91,7 @@ const GEOMETRY: Readonly<Record<AnimalId, Pick<AnimalDefinition, 'sourceSize' | 
   ),
   bird: animalGeometry(
     { width: 600, height: 447 },
-    58 * 55,
+    56,
     { minX: 53, minY: 24, maxX: 579, maxY: 428 },
     [
       [53, 193], [76, 158], [143, 197], [209, 185], [246, 153], [306, 57], [387, 24], [474, 44],
@@ -96,7 +103,7 @@ const GEOMETRY: Readonly<Record<AnimalId, Pick<AnimalDefinition, 'sourceSize' | 
   ),
   cat: animalGeometry(
     { width: 600, height: 415 },
-    72 * 74,
+    88,
     { minX: 76, minY: 1, maxX: 599, maxY: 405 },
     [
       [76, 108], [109, 30], [140, 7], [179, 1], [212, 18], [220, 51], [207, 69], [171, 80],
@@ -109,7 +116,7 @@ const GEOMETRY: Readonly<Record<AnimalId, Pick<AnimalDefinition, 'sourceSize' | 
   ),
   fox: animalGeometry(
     { width: 600, height: 434 },
-    92 * 68,
+    122,
     { minX: 1, minY: 5, maxX: 597, maxY: 413 },
     [
       [1, 158], [20, 97], [49, 63], [95, 39], [142, 35], [187, 49], [217, 79], [215, 94],
@@ -123,7 +130,7 @@ const GEOMETRY: Readonly<Record<AnimalId, Pick<AnimalDefinition, 'sourceSize' | 
   ),
   hedgehog: animalGeometry(
     { width: 600, height: 409 },
-    82 * 58,
+    76,
     { minX: 40, minY: 1, maxX: 561, maxY: 387 },
     [
       [40, 214], [86, 169], [66, 150], [68, 133], [124, 106], [119, 71], [181, 59], [177, 33],
@@ -136,7 +143,7 @@ const GEOMETRY: Readonly<Record<AnimalId, Pick<AnimalDefinition, 'sourceSize' | 
   ),
   rabbit: animalGeometry(
     { width: 557, height: 600 },
-    68 * 90,
+    76,
     { minX: 48, minY: 2, maxX: 478, maxY: 575 },
     [
       [48, 497], [68, 459], [98, 450], [106, 407], [131, 365], [202, 320], [224, 247], [175, 180],
@@ -148,7 +155,7 @@ const GEOMETRY: Readonly<Record<AnimalId, Pick<AnimalDefinition, 'sourceSize' | 
   ),
   raccoon: animalGeometry(
     { width: 600, height: 402 },
-    86 * 70,
+    108,
     { minX: 1, minY: 2, maxX: 599, maxY: 377 },
     [
       [1, 151], [31, 92], [65, 76], [102, 77], [139, 106], [149, 175], [171, 203], [188, 168],
@@ -161,7 +168,7 @@ const GEOMETRY: Readonly<Record<AnimalId, Pick<AnimalDefinition, 'sourceSize' | 
   ),
   turtle: animalGeometry(
     { width: 600, height: 335 },
-    94 * 52,
+    104,
     { minX: 0, minY: 1, maxX: 600, maxY: 334 },
     [
       [0, 226], [13, 207], [52, 197], [69, 129], [124, 52], [175, 19], [231, 3], [294, 2],
