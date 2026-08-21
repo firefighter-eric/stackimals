@@ -1,0 +1,11 @@
+node_modules
+.pnpm-store/
+dist
+.DS_Store
+*.local
+*.log
+coverage
+.vite
+.vercel
+playwright-report
+test-results
