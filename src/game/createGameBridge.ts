@@ -54,6 +54,17 @@ class PhaserGameBridge implements GameBridge {
         matter: {
           gravity: { x: 0, y: 1.05 },
           enableSleeping: true,
+          // Stacking exposes even small solver penetration. A few extra
+          // iterations keep resting outlines visually separated without
+          // changing the game's fixed 60 Hz simulation cadence.
+          positionIterations: 10,
+          velocityIterations: 8,
+          constraintIterations: 4,
+          runner: {
+            fps: 60,
+            maxUpdates: 3,
+            maxFrameTime: 50,
+          },
           debug: debugPhysics,
         },
       },

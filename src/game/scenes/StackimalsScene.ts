@@ -3,7 +3,7 @@ import { StackingAI } from '../ai';
 import { SeededAnimalQueue, StabilityDetector, resolveFallOutcome } from '../core';
 import type { Actor, AnimalId, MatchPhase, StackBodySnapshot } from '../core';
 import { getAnimalDefinition } from '../data';
-import type { AnimalDefinition, CollisionPart } from '../data/animals';
+import type { AnimalDefinition } from '../data/animals';
 import type { GameCommand, GamePhase, GameSnapshot } from '../../ui/gameBridge';
 import { ANIMALS as UI_ANIMALS } from '../../ui/gameBridge';
 import { GameAudio } from '../audio/GameAudio';
@@ -85,6 +85,29 @@ function toUiPhase(phase: MatchPhase, actor: Actor, paused: boolean): GamePhase 
 function normalizeAngle(value: number): number {
   const normalized = ((value + 180) % 360 + 360) % 360 - 180;
   return normalized === -180 ? 180 : normalized;
+}
+
+function rotatedCollisionXBounds(
+  definition: AnimalDefinition,
+  angleDeg: number,
+): { minX: number; maxX: number } {
+  const radians = Phaser.Math.DegToRad(angleDeg);
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  const originX = definition.collision.textureOrigin.x * definition.display.width;
+  const originY = definition.collision.textureOrigin.y * definition.display.height;
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+
+  for (const point of definition.collision.outline) {
+    const relativeX = point.x - originX;
+    const relativeY = point.y - originY;
+    const rotatedX = relativeX * cosine - relativeY * sine;
+    minX = Math.min(minX, rotatedX);
+    maxX = Math.max(maxX, rotatedX);
+  }
+
+  return { minX, maxX };
 }
 
 export class StackimalsScene extends Phaser.Scene {
@@ -296,6 +319,7 @@ export class StackimalsScene extends Phaser.Scene {
     const definition = getAnimalDefinition(this.currentAnimal);
     this.preview = this.add.image(PLATFORM_X, AIM_Y, definition.assetKey)
       .setDisplaySize(definition.display.width, definition.display.height)
+      .setOrigin(definition.collision.textureOrigin.x, definition.collision.textureOrigin.y)
       .setDepth(9);
     this.preview.setAlpha(actor === 'player' ? 1 : 0.88);
     this.publish();
@@ -340,12 +364,12 @@ export class StackimalsScene extends Phaser.Scene {
       return;
     }
     const definition = getAnimalDefinition(this.currentAnimal);
-    const radians = Phaser.Math.DegToRad(this.preview.angle);
-    const halfWidth = (
-      Math.abs(Math.cos(radians)) * definition.display.width
-      + Math.abs(Math.sin(radians)) * definition.display.height
-    ) / 2;
-    this.preview.x = Phaser.Math.Clamp(value, PLAYFIELD_MIN_X + halfWidth, PLAYFIELD_MAX_X - halfWidth);
+    const bounds = rotatedCollisionXBounds(definition, this.preview.angle);
+    const minimumX = PLAYFIELD_MIN_X - bounds.minX;
+    const maximumX = PLAYFIELD_MAX_X - bounds.maxX;
+    this.preview.x = minimumX <= maximumX
+      ? Phaser.Math.Clamp(value, minimumX, maximumX)
+      : PLATFORM_X;
   }
 
   private rotatePreview(direction: -1 | 1): void {
@@ -403,9 +427,9 @@ export class StackimalsScene extends Phaser.Scene {
     });
     image.setDisplaySize(definition.display.width, definition.display.height);
 
-    const body = this.createCompoundBody(definition, x, y, angleDeg);
+    const body = this.createOutlineBody(definition, x, y, angleDeg);
     image.setExistingBody(body, true);
-    image.setOrigin(0.5);
+    image.setOrigin(definition.collision.textureOrigin.x, definition.collision.textureOrigin.y);
     image.setPosition(x, y);
     image.setAngle(angleDeg);
     image.setFriction(definition.physics.friction, definition.physics.frictionAir, definition.physics.frictionStatic);
@@ -419,40 +443,23 @@ export class StackimalsScene extends Phaser.Scene {
     return { id, actor, animalId, image, body, isCurrentDrop: true };
   }
 
-  private createCompoundBody(
+  private createOutlineBody(
     definition: AnimalDefinition,
     x: number,
     y: number,
     angleDeg: number,
   ): MatterJS.BodyType {
-    const parts = definition.collisionParts.map((part) => this.createPart(part));
-    const body = this.matter.body.create({
-      parts,
+    const outline = definition.collision.outline.map((point) => ({ x: point.x, y: point.y }));
+    const body = this.matter.bodies.fromVertices(x, y, [outline], {
       friction: definition.physics.friction,
       frictionStatic: definition.physics.frictionStatic,
       frictionAir: definition.physics.frictionAir,
       restitution: definition.physics.restitution,
+      slop: 0.01,
       label: `stackimals-${definition.id}`,
-    });
-    this.matter.body.setPosition(body, { x, y });
+    }, true, 0.01, 1);
     this.matter.body.setAngle(body, Phaser.Math.DegToRad(angleDeg));
     return body;
-  }
-
-  private createPart(part: CollisionPart): MatterJS.BodyType {
-    if (part.shape === 'circle') {
-      return this.matter.bodies.circle(part.offsetX, part.offsetY, part.radius, {
-        isSensor: false,
-      });
-    }
-
-    return this.matter.bodies.rectangle(
-      part.offsetX,
-      part.offsetY,
-      part.width,
-      part.height,
-      { angle: Phaser.Math.DegToRad(part.rotationDeg ?? 0) },
-    );
   }
 
   private onCollisionStart(event: Phaser.Physics.Matter.Events.CollisionStartEvent): void {

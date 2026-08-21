@@ -57,7 +57,7 @@ describe('animal data', () => {
       expect(animal.display.width).toBeGreaterThan(0);
       expect(animal.display.height).toBeGreaterThan(0);
       expect(animal.allowedAngles).toContain(0);
-      expect(animal.collisionParts.length).toBeGreaterThan(1);
+      expect(animal.collision.outline.length).toBeGreaterThan(2);
       expect(animal.physics.friction).toBeGreaterThanOrEqual(0);
       expect(animal.physics.restitution).toBeGreaterThanOrEqual(0);
     }
