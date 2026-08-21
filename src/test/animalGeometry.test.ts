@@ -9,29 +9,45 @@ import {
 } from '../game/data/collisionGeometry';
 import { ANIMALS } from '../game/data/animals';
 
-const LEGACY_DISPLAY_AREAS = {
-  bear: 98 * 82,
-  bird: 58 * 55,
-  cat: 72 * 74,
-  fox: 92 * 68,
-  hedgehog: 82 * 58,
-  rabbit: 68 * 90,
-  raccoon: 86 * 70,
-  turtle: 94 * 52,
+const EXPECTED_DISPLAY_WIDTHS = {
+  bear: 148,
+  bird: 56,
+  cat: 88,
+  fox: 122,
+  hedgehog: 76,
+  rabbit: 76,
+  raccoon: 108,
+  turtle: 104,
 } as const;
 
 describe('alpha-derived animal collision geometry', () => {
-  it('preserves every source WebP aspect ratio without changing gameplay area', () => {
+  it('uses one uniform render scale while preserving every source WebP aspect ratio', () => {
     for (const animal of ANIMALS) {
+      expect(animal.display.width).toBe(EXPECTED_DISPLAY_WIDTHS[animal.id]);
+      expect(animal.display.width).toBeCloseTo(
+        animal.sourceSize.width * animal.displayScale,
+        12,
+      );
+      expect(animal.display.height).toBeCloseTo(
+        animal.sourceSize.height * animal.displayScale,
+        12,
+      );
       expect(animal.display.width / animal.display.height).toBeCloseTo(
         animal.sourceSize.width / animal.sourceSize.height,
         12,
       );
-      expect(animal.display.width * animal.display.height).toBeCloseTo(
-        LEGACY_DISPLAY_AREAS[animal.id],
-        8,
-      );
     }
+  });
+
+  it('makes large and small animals visibly different without exceeding the playfield', () => {
+    const widths = ANIMALS.map((animal) => animal.display.width);
+    const areas = ANIMALS.map((animal) => animal.display.width * animal.display.height);
+
+    expect(Math.max(...widths) / Math.min(...widths)).toBeGreaterThan(2.4);
+    expect(Math.max(...areas) / Math.min(...areas)).toBeGreaterThan(5);
+    expect(Math.max(...ANIMALS.map((animal) => (
+      Math.max(animal.display.width, animal.display.height)
+    )))).toBeLessThan(322);
   });
 
   it('provides simple clockwise concave outlines in displayed-texture coordinates', () => {

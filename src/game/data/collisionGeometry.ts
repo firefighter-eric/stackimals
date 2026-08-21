@@ -40,21 +40,23 @@ export interface CollisionGeometry {
 
 export type PixelVertex = readonly [x: number, y: number];
 
-export function displaySizeForArea(sourceSize: Size, targetArea: number): Size {
+export function displaySizeForWidth(sourceSize: Size, targetWidth: number): Size {
   if (
     sourceSize.width <= 0
     || sourceSize.height <= 0
     || !Number.isFinite(sourceSize.width)
     || !Number.isFinite(sourceSize.height)
-    || !Number.isFinite(targetArea)
-    || targetArea <= 0
+    || !Number.isFinite(targetWidth)
+    || targetWidth <= 0
   ) {
-    throw new RangeError('Source dimensions and target area must be finite and positive.');
+    throw new RangeError('Source dimensions and target width must be finite and positive.');
   }
 
-  const aspectRatio = sourceSize.width / sourceSize.height;
-  const width = Math.sqrt(targetArea * aspectRatio);
-  return { width, height: width / aspectRatio };
+  const uniformScale = targetWidth / sourceSize.width;
+  return {
+    width: sourceSize.width * uniformScale,
+    height: sourceSize.height * uniformScale,
+  };
 }
 
 export function polygonSignedArea(vertices: readonly Point[]): number {
