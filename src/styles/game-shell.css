@@ -318,10 +318,10 @@
   bottom: -19px;
   left: 50%;
   display: flex;
-  height: 28px;
+  min-height: 34px;
   align-items: center;
-  gap: 5px;
-  padding: 3px 10px 3px 5px;
+  gap: 6px;
+  padding: 4px 8px 4px 5px;
   transform: translateX(-50%);
   border: 2px solid #a46e3b;
   border-radius: 15px;
@@ -333,18 +333,36 @@
 }
 
 .next-animal img {
-  width: 23px;
-  height: 23px;
+  width: 25px;
+  height: 25px;
   object-fit: contain;
 }
 
-.next-animal span {
+.next-animal__copy {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.next-animal__copy small {
   color: #775f41;
+  font-size: 8px;
   font-weight: 750;
 }
 
-.next-animal strong {
+.next-animal__copy strong {
   font-size: 11px;
+}
+
+.next-animal em {
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: #e2edc5;
+  color: #4d6933;
+  font-family: system-ui, sans-serif;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
 }
 
 .game-stage {
@@ -549,6 +567,7 @@
   position: absolute;
   z-index: 30;
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   inset: 0;
   padding: 22px;
   place-items: center;
@@ -559,6 +578,10 @@
 
 .modal-backdrop--celebration {
   background: rgb(8 39 68 / 58%);
+}
+
+.modal-backdrop--roster {
+  padding: 12px;
 }
 
 .game-modal {
@@ -680,6 +703,60 @@
   display: grid;
 }
 
+.language-setting {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 100%;
+  margin: -4px 0 17px;
+  gap: 7px;
+  text-align: left;
+}
+
+.language-setting > span {
+  padding-inline: 3px;
+  color: #5b6570;
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.language-setting__options {
+  display: grid;
+  padding: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  border: 2px solid #b4834b;
+  border-radius: 15px;
+  background: #ead2a7;
+  box-shadow: inset 0 2px 0 rgb(110 72 38 / 14%);
+}
+
+.language-setting__options button {
+  min-height: 39px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #6d5538;
+  cursor: pointer;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.language-setting__options button.is-active {
+  background: #fff8e9;
+  box-shadow: 0 3px 0 #b07d45, 0 4px 9px rgb(91 58 29 / 16%);
+  color: var(--navy-900);
+}
+
+.language-setting__options button:active {
+  translate: 0 2px;
+}
+
 .modal-button {
   position: relative;
   z-index: 1;
@@ -711,11 +788,150 @@
   box-shadow: 0 5px 0 #ab7942;
 }
 
+.modal-button--roster {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-color: #5f843c;
+  background: #dceab7;
+  box-shadow: 0 5px 0 #557735;
+  color: var(--navy-900);
+  text-align: left;
+}
+
+.modal-button--roster small {
+  color: #4f673b;
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 750;
+}
+
 .modal-button--danger {
   border-color: #8e3026;
   background: #c74234;
   box-shadow: 0 5px 0 #84271f;
   color: #fff;
+}
+
+.game-modal--roster {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  width: min(100%, 380px);
+  height: calc(100dvh - 24px);
+  max-height: calc(100dvh - 24px);
+  padding: 22px 16px 18px;
+}
+
+.game-modal--roster h2 {
+  font-size: clamp(25px, 7vw, 34px);
+}
+
+.game-modal--roster > p:not(.game-modal__eyebrow) {
+  margin: 7px 0 12px;
+  font-size: 12px;
+}
+
+.animal-roster {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-self: stretch;
+  min-height: 0;
+  width: 100%;
+  margin: 0 0 13px;
+  padding: 3px 3px 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 162px;
+  align-content: start;
+  gap: 9px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  scrollbar-color: #b4834b transparent;
+  scrollbar-width: thin;
+}
+
+.animal-roster__card {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  grid-template-rows: 106px auto;
+  border: 2px solid #c89458;
+  border-radius: 16px;
+  background: #fff8e9;
+  box-shadow: 0 4px 0 #aa7140;
+}
+
+.animal-roster__figure {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 7px 4px 4px;
+  background:
+    radial-gradient(circle at 50% 88%, rgb(126 174 76 / 24%) 0 24%, transparent 25%),
+    linear-gradient(#dff2f2, #f9eac6);
+}
+
+.animal-roster__figure img {
+  max-width: 100%;
+  max-height: 99px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 2px rgb(44 53 36 / 28%));
+}
+
+.animal-roster__meta {
+  display: block;
+  min-width: 0;
+  padding: 7px 8px 8px;
+  border-top: 1px solid #e4c38e;
+}
+
+.animal-roster__meta strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.animal-roster__copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  text-align: left;
+}
+
+.animal-roster__copy em {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #6d654f;
+  font-family: system-ui, sans-serif;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.15;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.animal-roster__size {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 3px 5px;
+  border-radius: 999px;
+  background: #e2edc5;
+  box-shadow: 0 1px 3px rgb(43 70 31 / 16%);
+  color: #4d6933;
+  font-family: system-ui, sans-serif;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.animal-roster__back {
+  width: 100%;
+  flex: none;
 }
 
 .result-score {
@@ -830,6 +1046,252 @@
 @media (min-width: 700px) {
   .game-shell {
     border-radius: 25px;
+  }
+}
+
+/* iPad portrait: keep the tower-first vertical flow, but use the larger canvas. */
+@media (min-width: 600px) and (orientation: portrait) {
+  .game-shell {
+    width: min(calc(100vw - 32px), 620px);
+    height: min(calc(100dvh - 32px), 1000px);
+    max-height: calc(100dvh - 32px);
+    border: 3px solid #724723;
+  }
+
+  .game-hud__title-row {
+    grid-template-columns: 54px minmax(0, 1fr) 54px;
+    padding: 9px 18px 10px;
+  }
+
+  .logo-plaque {
+    height: 54px;
+    font-size: 27px;
+  }
+
+  .scoreboard {
+    grid-template-columns: 82px minmax(0, 1fr) 36px minmax(0, 1fr) 82px;
+    min-height: 84px;
+    gap: 7px;
+    padding: 7px 12px 9px;
+  }
+
+  .avatar-card__portrait {
+    width: 55px;
+    height: 49px;
+  }
+
+  .animal-queue {
+    height: 56px;
+    padding: 5px;
+  }
+
+  .animal-queue__item {
+    height: 44px;
+  }
+
+  .turn-status {
+    width: 36px;
+    height: 63px;
+  }
+
+  .next-animal {
+    min-height: 39px;
+    padding-inline: 8px 11px;
+  }
+
+  .game-controls {
+    grid-template-columns: 82px minmax(190px, 1fr) 82px;
+    gap: 18px;
+    padding-inline: 40px;
+  }
+
+  .game-controls::before {
+    inset-inline: 136px;
+  }
+
+  .control-button {
+    height: 72px;
+  }
+
+  .game-modal--roster {
+    width: min(100%, 580px);
+    height: min(calc(100dvh - 64px), 880px);
+    max-height: calc(100dvh - 64px);
+  }
+
+  .animal-roster {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* iPad landscape and desktop: dedicate the right side to the playfield. */
+@media (min-width: 800px) and (orientation: landscape) and (min-height: 600px) {
+  .game-shell {
+    grid-template-columns: minmax(340px, 370px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    width: min(calc(100vw - 32px), 980px);
+    height: min(calc(100dvh - 32px), 760px);
+    max-height: calc(100dvh - 32px);
+    overflow: hidden;
+    border: 3px solid #724723;
+    border-radius: 28px;
+  }
+
+  .game-hud {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    grid-column: 1;
+    grid-row: 1 / 3;
+    grid-template-rows: auto auto auto;
+    padding-top: 14px;
+    overflow: hidden;
+    border-right: 4px solid #9f6b35;
+    border-bottom: 0;
+    box-shadow: 5px 0 14px rgb(65 54 32 / 23%);
+  }
+
+  .game-hud__title-row {
+    grid-template-columns: 48px minmax(0, 1fr) 48px;
+    padding: 5px 11px 13px;
+  }
+
+  .logo-plaque {
+    font-size: 22px;
+  }
+
+  .scoreboard {
+    margin: 0 12px;
+    padding-block: 8px 10px;
+    border: 2px solid rgb(134 84 39 / 34%);
+    border-radius: 17px;
+    background: rgb(255 248 232 / 58%);
+  }
+
+  .next-animal {
+    position: relative;
+    bottom: auto;
+    left: auto;
+    display: grid;
+    min-height: 106px;
+    margin: 24px 24px 0;
+    padding: 13px 16px;
+    transform: none;
+    grid-template-columns: 68px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    gap: 4px 12px;
+    border-radius: 21px;
+    white-space: normal;
+  }
+
+  .next-animal img {
+    width: 68px;
+    height: 68px;
+    grid-row: 1 / 3;
+  }
+
+  .next-animal__copy {
+    align-self: end;
+    gap: 4px;
+  }
+
+  .next-animal__copy small {
+    font-size: 10px;
+  }
+
+  .next-animal__copy strong {
+    font-size: 20px;
+  }
+
+  .next-animal em {
+    align-self: start;
+    justify-self: start;
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  .game-stage {
+    min-width: 0;
+    grid-column: 2;
+    grid-row: 1;
+    border-bottom: 0;
+  }
+
+  .stage-message {
+    max-width: min(430px, calc(100% - 72px));
+    font-size: 12px;
+  }
+
+  .game-controls {
+    grid-column: 2;
+    grid-row: 2;
+    grid-template-columns: 82px minmax(170px, 1fr) 82px;
+    gap: 18px;
+    padding: 13px 32px 17px;
+  }
+
+  .game-controls::before {
+    inset-inline: 123px;
+  }
+
+  .control-button {
+    height: 70px;
+  }
+
+  .modal-backdrop {
+    padding: 24px;
+  }
+
+  .game-modal--roster {
+    width: min(100%, 760px);
+    height: min(100%, 680px);
+    max-height: 100%;
+    padding-inline: 20px;
+  }
+
+  .animal-roster {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* 16:9 desktop: use the available stage width without stretching sprites. */
+@media (min-width: 1200px) and (min-aspect-ratio: 8 / 5) and (min-height: 680px) {
+  .game-shell {
+    grid-template-columns: 390px minmax(0, 1fr);
+    width: min(calc(100vw - 96px), 1120px);
+    height: min(calc(100dvh - 64px), 820px);
+    max-height: calc(100dvh - 64px);
+  }
+
+  .game-hud {
+    padding-top: 20px;
+  }
+
+  .scoreboard {
+    margin-inline: 16px;
+  }
+
+  .next-animal {
+    min-height: 124px;
+    margin: 32px 30px 0;
+    grid-template-columns: 80px minmax(0, 1fr);
+  }
+
+  .next-animal img {
+    width: 80px;
+    height: 80px;
+  }
+
+  .next-animal__copy strong {
+    font-size: 22px;
+  }
+
+  .game-controls {
+    padding-inline: 48px;
+  }
+
+  .game-controls::before {
+    inset-inline: 142px;
   }
 }
 

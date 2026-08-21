@@ -1,8 +1,10 @@
-import type { AnimalPreview, GameSnapshot } from './gameBridge';
+import type { AnimalPreview, GameLanguage, GameSnapshot } from './gameBridge';
 import { PauseIcon } from './icons';
+import { copyFor } from './i18n';
 
 interface GameHudProps {
   snapshot: GameSnapshot;
+  language: GameLanguage;
   onPause: () => void;
 }
 
@@ -33,17 +35,19 @@ function AvatarCard({
   assetUrl,
   isActive,
   score,
+  placedLabel,
 }: {
   label: string;
   assetUrl: string;
   isActive: boolean;
   score: number;
+  placedLabel: (score: number) => string;
 }) {
   return (
     <div className={`avatar-card${isActive ? ' avatar-card--active' : ''}`}>
       <div className="avatar-card__portrait">
         <img src={assetUrl} alt="" draggable={false} />
-        <span className="avatar-card__score" aria-label={`${score} 个已放置`}>
+        <span className="avatar-card__score" aria-label={placedLabel(score)}>
           {score}
         </span>
       </div>
@@ -52,18 +56,20 @@ function AvatarCard({
   );
 }
 
-function TurnLight({ snapshot }: { snapshot: GameSnapshot }) {
+function TurnLight({ snapshot, language }: { snapshot: GameSnapshot; language: GameLanguage }) {
   const humanIsActive = snapshot.turn === 'human';
+  const copy = copyFor(language);
 
   return (
-    <div className="turn-status" aria-label={humanIsActive ? '你的回合' : 'Milo AI 的回合'}>
+    <div className="turn-status" aria-label={humanIsActive ? copy.yourTurn : copy.miloTurn}>
       <span className={`turn-light turn-light--human${humanIsActive ? ' is-active' : ''}`} />
       <span className={`turn-light turn-light--ai${humanIsActive ? '' : ' is-active'}`} />
     </div>
   );
 }
 
-export function GameHud({ snapshot, onPause }: GameHudProps) {
+export function GameHud({ snapshot, language, onPause }: GameHudProps) {
+  const copy = copyFor(language);
   const pauseDisabled =
     snapshot.phase === 'loading' ||
     snapshot.phase === 'gameOver' ||
@@ -77,7 +83,7 @@ export function GameHud({ snapshot, onPause }: GameHudProps) {
           type="button"
           onClick={onPause}
           disabled={pauseDisabled}
-          aria-label="暂停游戏"
+          aria-label={copy.pauseGame}
         >
           <PauseIcon />
         </button>
@@ -88,8 +94,8 @@ export function GameHud({ snapshot, onPause }: GameHudProps) {
           <span className="logo-leaf logo-leaf--right" aria-hidden="true">◆</span>
         </div>
 
-        <div className="game-hud__round" aria-label={`第 ${snapshot.round} 回合`}>
-          <span>回合</span>
+        <div className="game-hud__round" aria-label={copy.roundLabel(snapshot.round)}>
+          <span>{copy.round}</span>
           <strong>{snapshot.round}</strong>
         </div>
       </div>
@@ -100,24 +106,35 @@ export function GameHud({ snapshot, onPause }: GameHudProps) {
           assetUrl="/assets/game/animals/fox.webp"
           score={snapshot.scoreHuman}
           isActive={snapshot.turn === 'human'}
+          placedLabel={copy.placedCount}
         />
 
-        <AnimalQueue animals={snapshot.upcomingHuman} label="你接下来的动物" align="left" />
-        <TurnLight snapshot={snapshot} />
-        <AnimalQueue animals={snapshot.upcomingAi} label="Milo 接下来的动物" align="right" />
+        <AnimalQueue animals={snapshot.upcomingHuman} label={copy.yourQueue} align="left" />
+        <TurnLight snapshot={snapshot} language={language} />
+        <AnimalQueue animals={snapshot.upcomingAi} label={copy.miloQueue} align="right" />
 
         <AvatarCard
           label="MILO AI"
           assetUrl="/assets/game/animals/bear.webp"
           score={snapshot.scoreAi}
           isActive={snapshot.turn === 'ai'}
+          placedLabel={copy.placedCount}
         />
       </div>
 
-      <div className="next-animal" aria-live="polite">
+      <div
+        className="next-animal"
+        aria-live="polite"
+        aria-label={language === 'zh'
+          ? `${snapshot.currentAnimal.name}，${snapshot.currentAnimal.trait}：${snapshot.currentAnimal.tip}`
+          : `${snapshot.currentAnimal.name}, ${snapshot.currentAnimal.trait}: ${snapshot.currentAnimal.tip}`}
+      >
         <img src={snapshot.currentAnimal.assetUrl} alt="" draggable={false} />
-        <span>下一只 · {snapshot.turn === 'human' ? '你' : 'Milo'}</span>
-        <strong>{snapshot.currentAnimal.name}</strong>
+        <span className="next-animal__copy">
+          <small>{copy.nextAnimal} · {snapshot.turn === 'human' ? copy.you : 'Milo'}</small>
+          <strong>{snapshot.currentAnimal.name}</strong>
+        </span>
+        <em>{snapshot.currentAnimal.trait}</em>
       </div>
     </header>
   );

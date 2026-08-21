@@ -1,0 +1,146 @@
+import type { GameLanguage } from '../game/core/types';
+
+export const LANGUAGE_STORAGE_KEY = 'stackimals-language';
+
+export const UI_COPY = {
+  zh: {
+    appLabel: 'Stackimals 游戏',
+    stageLabel: '动物堆叠游戏区域',
+    loading: '正在召集动物…',
+    loadingStatus: '正在准备动物积木…',
+    aimStatus: '拖动动物选择落点',
+    humanSettlingStatus: '稳住，稳住…',
+    aiThinkingStatus: 'Milo 正在观察动物塔…',
+    aiSettlingStatus: 'Milo 的动物正在落下',
+    pausedStatus: '游戏已暂停',
+    humanWinStatus: '漂亮的动物塔！',
+    aiWinStatus: '再试一次吧！',
+    errorStatus: '游戏暂时无法继续',
+    pauseGame: '暂停游戏',
+    round: '回合',
+    roundLabel: (round: number) => `第 ${round} 回合`,
+    placedCount: (score: number) => `${score} 个已放置`,
+    yourTurn: '你的回合',
+    miloTurn: 'Milo AI 的回合',
+    yourQueue: '你接下来的动物',
+    miloQueue: 'Milo 接下来的动物',
+    nextAnimal: '下一只',
+    you: '你',
+    controls: '游戏控制',
+    rotateLeft: '向左旋转',
+    rotateRight: '向右旋转',
+    drop: '投放',
+    settingsEyebrow: '游戏设置',
+    pausedTitle: '游戏已暂停',
+    pausedBody: '动物们会在这里等你回来。',
+    language: '语言',
+    chinese: '中文',
+    english: 'English',
+    resume: '继续游戏',
+    animalWarriors: '动物战士',
+    viewAllAnimals: (count: number) => `查看全部 ${count} 位`,
+    restart: '重新开始',
+    restartEyebrow: '重新开局',
+    restartTitle: '确定要重新开始？',
+    restartBody: '当前的动物塔和本局分数都会清空。',
+    back: '返回',
+    rosterEyebrow: '动物图鉴',
+    rosterBody: (count: number) => `${count} 位木偶勇士，按游戏中的真实体型比例展示。`,
+    rosterLabel: '全部动物战士',
+    backToSettings: '返回设置',
+    loadFailed: '加载失败',
+    animalsLost: '动物们迷路了',
+    retryBody: '请重新开始游戏。',
+    retry: '再试一次',
+    humanWinnerTitle: '你赢了！',
+    humanWinnerBody: 'Milo 的动物掉下去了。你的动物塔稳稳站住！',
+    aiWinnerTitle: 'Milo 赢了',
+    aiWinnerBody: '就差一点！换个落点，再挑战一次吧。',
+    scoreLabel: (human: number, ai: number) => `比分 ${human} 比 ${ai}`,
+    playAgain: '再来一局',
+    portraitTitle: '请竖屏游玩',
+    portraitBody: '这样动物们有更多空间往上堆',
+    unknownError: '未知错误',
+    startupFailed: (message: string) => `游戏启动失败：${message}`,
+  },
+  en: {
+    appLabel: 'Stackimals game',
+    stageLabel: 'Animal stacking game area',
+    loading: 'Gathering the animals…',
+    loadingStatus: 'Preparing the animal blocks…',
+    aimStatus: 'Drag the animal to choose a landing spot',
+    humanSettlingStatus: 'Steady, steady…',
+    aiThinkingStatus: 'Milo is studying the animal tower…',
+    aiSettlingStatus: "Milo's animal is falling",
+    pausedStatus: 'Game paused',
+    humanWinStatus: 'What a beautiful animal tower!',
+    aiWinStatus: 'Give it another try!',
+    errorStatus: 'The game cannot continue right now',
+    pauseGame: 'Pause game',
+    round: 'ROUND',
+    roundLabel: (round: number) => `Round ${round}`,
+    placedCount: (score: number) => `${score} placed`,
+    yourTurn: 'Your turn',
+    miloTurn: "Milo AI's turn",
+    yourQueue: 'Your upcoming animals',
+    miloQueue: "Milo's upcoming animals",
+    nextAnimal: 'NEXT',
+    you: 'YOU',
+    controls: 'Game controls',
+    rotateLeft: 'Rotate left',
+    rotateRight: 'Rotate right',
+    drop: 'DROP',
+    settingsEyebrow: 'GAME SETTINGS',
+    pausedTitle: 'Game Paused',
+    pausedBody: 'The animals will wait right here for you.',
+    language: 'Language',
+    chinese: '中文',
+    english: 'English',
+    resume: 'Resume Game',
+    animalWarriors: 'Animal Warriors',
+    viewAllAnimals: (count: number) => `View all ${count}`,
+    restart: 'Restart',
+    restartEyebrow: 'NEW GAME',
+    restartTitle: 'Restart the game?',
+    restartBody: 'Your current tower and score will be cleared.',
+    back: 'Back',
+    rosterEyebrow: 'ANIMAL GUIDE',
+    rosterBody: (count: number) => `${count} wooden warriors at their true in-game scale.`,
+    rosterLabel: 'All animal warriors',
+    backToSettings: 'Back to Settings',
+    loadFailed: 'LOAD FAILED',
+    animalsLost: 'The animals got lost',
+    retryBody: 'Please restart the game.',
+    retry: 'Try Again',
+    humanWinnerTitle: 'You Win!',
+    humanWinnerBody: "Milo's animal fell. Your tower is still standing!",
+    aiWinnerTitle: 'Milo Wins',
+    aiWinnerBody: 'So close! Pick a new landing spot and try again.',
+    scoreLabel: (human: number, ai: number) => `Score ${human} to ${ai}`,
+    playAgain: 'Play Again',
+    portraitTitle: 'Please play in portrait',
+    portraitBody: 'The animals need more room to stack upward',
+    unknownError: 'Unknown error',
+    startupFailed: (message: string) => `Game failed to start: ${message}`,
+  },
+} as const;
+
+export function copyFor(language: GameLanguage) {
+  return UI_COPY[language];
+}
+
+export function readStoredLanguage(): GameLanguage {
+  try {
+    return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) === 'en' ? 'en' : 'zh';
+  } catch {
+    return 'zh';
+  }
+}
+
+export function storeLanguage(language: GameLanguage): void {
+  try {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  } catch {
+    // Storage can be unavailable in private or embedded contexts.
+  }
+}

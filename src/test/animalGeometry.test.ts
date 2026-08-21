@@ -13,8 +13,13 @@ const EXPECTED_DISPLAY_WIDTHS = {
   bear: 148,
   bird: 56,
   cat: 88,
+  crocodile: 168,
+  elephant: 166,
   fox: 122,
+  frog: 68,
+  giraffe: 84,
   hedgehog: 76,
+  penguin: 74,
   rabbit: 76,
   raccoon: 108,
   turtle: 104,
@@ -23,7 +28,7 @@ const EXPECTED_DISPLAY_WIDTHS = {
 describe('alpha-derived animal collision geometry', () => {
   it('uses one uniform render scale while preserving every source WebP aspect ratio', () => {
     for (const animal of ANIMALS) {
-      expect(animal.display.width).toBe(EXPECTED_DISPLAY_WIDTHS[animal.id]);
+      expect(animal.display.width).toBeCloseTo(EXPECTED_DISPLAY_WIDTHS[animal.id], 12);
       expect(animal.display.width).toBeCloseTo(
         animal.sourceSize.width * animal.displayScale,
         12,

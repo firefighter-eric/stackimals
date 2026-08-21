@@ -1,20 +1,25 @@
 import { RotateLeftIcon, RotateRightIcon } from './icons';
+import type { GameLanguage } from './gameBridge';
+import { copyFor } from './i18n';
 
 interface GameControlsProps {
+  language: GameLanguage;
   enabled: boolean;
   onRotate: (direction: -1 | 1) => void;
   onDrop: () => void;
 }
 
-export function GameControls({ enabled, onRotate, onDrop }: GameControlsProps) {
+export function GameControls({ language, enabled, onRotate, onDrop }: GameControlsProps) {
+  const copy = copyFor(language);
+
   return (
-    <footer className="game-controls" aria-label="游戏控制">
+    <footer className="game-controls" aria-label={copy.controls}>
       <button
         className="control-button control-button--rotate"
         type="button"
         disabled={!enabled}
         onClick={() => onRotate(-1)}
-        aria-label="向左旋转"
+        aria-label={copy.rotateLeft}
       >
         <RotateLeftIcon />
       </button>
@@ -25,7 +30,7 @@ export function GameControls({ enabled, onRotate, onDrop }: GameControlsProps) {
         disabled={!enabled}
         onClick={onDrop}
       >
-        投放
+        {copy.drop}
       </button>
 
       <button
@@ -33,7 +38,7 @@ export function GameControls({ enabled, onRotate, onDrop }: GameControlsProps) {
         type="button"
         disabled={!enabled}
         onClick={() => onRotate(1)}
-        aria-label="向右旋转"
+        aria-label={copy.rotateRight}
       >
         <RotateRightIcon />
       </button>

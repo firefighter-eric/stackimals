@@ -5,7 +5,7 @@ import { resolveFallOutcome } from '../game/core/matchRules';
 import { SeededRandom } from '../game/core/prng';
 import { StabilityDetector, isBodyAtRest } from '../game/core/stability';
 import { ANIMAL_IDS } from '../game/core/types';
-import { ANIMALS } from '../game/data/animals';
+import { ANIMALS, getAnimalCopy } from '../game/data/animals';
 
 describe('SeededRandom', () => {
   it('repeats the same sequence for the same string seed', () => {
@@ -32,13 +32,14 @@ describe('SeededAnimalQueue', () => {
   it('is reproducible and includes every animal in each complete bag', () => {
     const first = new SeededAnimalQueue('same-match');
     const second = new SeededAnimalQueue('same-match');
-    const firstSixteen = Array.from({ length: 16 }, () => first.next());
-    const secondSixteen = Array.from({ length: 16 }, () => second.next());
+    const bagSize = ANIMAL_IDS.length;
+    const firstTwoBags = Array.from({ length: bagSize * 2 }, () => first.next());
+    const secondTwoBags = Array.from({ length: bagSize * 2 }, () => second.next());
 
-    expect(firstSixteen).toEqual(secondSixteen);
-    expect(new Set(firstSixteen.slice(0, 8))).toEqual(new Set(ANIMAL_IDS));
-    expect(new Set(firstSixteen.slice(8, 16))).toEqual(new Set(ANIMAL_IDS));
-    expect(firstSixteen[7]).not.toBe(firstSixteen[8]);
+    expect(firstTwoBags).toEqual(secondTwoBags);
+    expect(new Set(firstTwoBags.slice(0, bagSize))).toEqual(new Set(ANIMAL_IDS));
+    expect(new Set(firstTwoBags.slice(bagSize))).toEqual(new Set(ANIMAL_IDS));
+    expect(firstTwoBags[bagSize - 1]).not.toBe(firstTwoBags[bagSize]);
   });
 
   it('previews without consuming animals', () => {
@@ -51,7 +52,7 @@ describe('SeededAnimalQueue', () => {
 });
 
 describe('animal data', () => {
-  it('defines all eight render and physics contracts', () => {
+  it('defines every render and physics contract', () => {
     expect(ANIMALS.map((animal) => animal.id)).toEqual(ANIMAL_IDS);
     for (const animal of ANIMALS) {
       expect(animal.display.width).toBeGreaterThan(0);
@@ -60,6 +61,31 @@ describe('animal data', () => {
       expect(animal.collision.outline.length).toBeGreaterThan(2);
       expect(animal.physics.friction).toBeGreaterThanOrEqual(0);
       expect(animal.physics.restitution).toBeGreaterThanOrEqual(0);
+      expect(animal.gameplay.tip.length).toBeGreaterThan(0);
+      expect(animal.gameplay.tipEn.length).toBeGreaterThan(0);
+      expect(animal.gameplay.settledCopy.length).toBeGreaterThan(0);
+      expect(animal.gameplay.settledCopyEn.length).toBeGreaterThan(0);
+      expect(animal.sizeLabelEn.length).toBeGreaterThan(0);
+      expect(animal.traitEn.length).toBeGreaterThan(0);
+      expect(animal.gameplay.moveSpeedMultiplier).toBeGreaterThan(0.5);
+      expect(animal.gameplay.moveSpeedMultiplier).toBeLessThan(1.5);
+      expect(animal.gameplay.aiOrientationWeight).toBeGreaterThanOrEqual(0);
+      expect(animal.gameplay.preferredAngles.length).toBeGreaterThan(0);
+      for (const preferredAngle of animal.gameplay.preferredAngles) {
+        expect(animal.allowedAngles).toContain(preferredAngle);
+      }
+    }
+  });
+
+  it('provides complete Chinese and English player-facing copy', () => {
+    for (const animal of ANIMALS) {
+      const chinese = getAnimalCopy(animal.id, 'zh');
+      const english = getAnimalCopy(animal.id, 'en');
+
+      expect(Object.values(chinese).every((value) => value.length > 0)).toBe(true);
+      expect(Object.values(english).every((value) => value.length > 0)).toBe(true);
+      expect(chinese.name).toBe(animal.nameZh);
+      expect(english.name).toBe(animal.name);
     }
   });
 });
