@@ -1,18 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import type { GameBridge, GameCommand, GameLanguage, GameSnapshot } from './gameBridge';
+import type { AnimalId, GameBridge, GameCommand, GameLanguage, GameSnapshot } from './gameBridge';
 import { createInitialGameSnapshot, getAnimalPreview } from './gameBridge';
 import { GameControls } from './GameControls';
 import { GameHud } from './GameHud';
 import { GameModal } from './GameModal';
 import { copyFor, readStoredLanguage, storeLanguage } from './i18n';
+import {
+  opponentAnimalFor,
+  readStoredPlayerAnimal,
+  storePlayerAnimal,
+} from './playerIdentity';
+import { TablePlayers } from './TablePlayers';
 
 interface GameShellProps {
   bridge: GameBridge;
 }
 
-function isInteractiveTarget(target: EventTarget | null) {
+function isTextEntryTarget(target: EventTarget | null) {
   return target instanceof HTMLElement &&
-    Boolean(target.closest('button, a, input, select, textarea, [contenteditable="true"]'));
+    Boolean(target.closest('input, select, textarea, [contenteditable="true"]'));
 }
 
 function isPlayablePhase(phase: GameSnapshot['phase']) {
@@ -48,6 +54,7 @@ function statusCopy(snapshot: GameSnapshot, language: GameLanguage) {
 export function GameShell({ bridge }: GameShellProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [language, setLanguage] = useState<GameLanguage>(() => readStoredLanguage());
+  const [playerAnimalId, setPlayerAnimalId] = useState<AnimalId>(() => readStoredPlayerAnimal());
   const initialSnapshotRef = useRef<GameSnapshot>(createInitialGameSnapshot(language));
   const snapshotRef = useRef<GameSnapshot>(initialSnapshotRef.current);
   const languageRef = useRef(language);
@@ -82,7 +89,9 @@ export function GameShell({ bridge }: GameShellProps) {
   }, [bridge]);
 
   useEffect(() => {
+    const copy = copyFor(language);
     document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+    document.title = copy.gameTitle;
     storeLanguage(language);
     setSnapshot((current) => ({
       ...current,
@@ -95,14 +104,23 @@ export function GameShell({ bridge }: GameShellProps) {
   }, [bridge, language]);
 
   useEffect(() => {
-    const activeDirections = new Set<-1 | 1>();
+    storePlayerAnimal(playerAnimalId);
+  }, [playerAnimalId]);
+
+  useEffect(() => {
+    const activeMoves = new Set<-1 | 1>();
+    const activeRotations = new Set<-1 | 1>();
     const dispatch = (command: GameCommand) => bridge.dispatch(command);
 
-    const releaseDirections = () => {
-      for (const direction of activeDirections) {
+    const releaseControls = () => {
+      for (const direction of activeMoves) {
         dispatch({ type: 'move', direction, active: false });
       }
-      activeDirections.clear();
+      for (const direction of activeRotations) {
+        dispatch({ type: 'rotate', direction, active: false });
+      }
+      activeMoves.clear();
+      activeRotations.clear();
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -114,7 +132,7 @@ export function GameShell({ bridge }: GameShellProps) {
         return;
       }
 
-      if (isInteractiveTarget(event.target)) {
+      if (isTextEntryTarget(event.target)) {
         return;
       }
 
@@ -152,54 +170,76 @@ export function GameShell({ bridge }: GameShellProps) {
 
       if (moveDirection !== null) {
         event.preventDefault();
-        if (!activeDirections.has(moveDirection)) {
-          activeDirections.add(moveDirection);
+        if (!activeMoves.has(moveDirection)) {
+          activeMoves.add(moveDirection);
           dispatch({ type: 'move', direction: moveDirection, active: true });
         }
         return;
       }
 
-      if ((event.code === 'KeyQ' || event.code === 'ArrowDown') && !event.repeat) {
-        event.preventDefault();
-        dispatch({ type: 'rotate', direction: -1 });
-        return;
-      }
+      const rotationDirection =
+        event.code === 'KeyQ' || event.code === 'ArrowDown'
+          ? -1
+          : event.code === 'KeyE' || event.code === 'ArrowUp'
+            ? 1
+            : null;
 
-      if ((event.code === 'KeyE' || event.code === 'ArrowUp') && !event.repeat) {
+      if (rotationDirection !== null) {
         event.preventDefault();
-        dispatch({ type: 'rotate', direction: 1 });
+        if (!activeRotations.has(rotationDirection)) {
+          activeRotations.add(rotationDirection);
+          dispatch({ type: 'rotate', direction: rotationDirection, active: true });
+        }
         return;
       }
 
       if ((event.code === 'Space' || event.code === 'Enter') && !event.repeat) {
         event.preventDefault();
         dispatch({ type: 'drop' });
+        return;
+      }
+
+      if (event.code === 'KeyR' && !event.repeat) {
+        event.preventDefault();
+        dispatch({ type: 'swap' });
       }
     };
 
     const onKeyUp = (event: KeyboardEvent) => {
-      const direction =
+      const moveDirection =
         event.code === 'ArrowLeft' || event.code === 'KeyA'
           ? -1
           : event.code === 'ArrowRight' || event.code === 'KeyD'
             ? 1
             : null;
 
-      if (direction !== null && activeDirections.delete(direction)) {
+      if (moveDirection !== null && activeMoves.delete(moveDirection)) {
         event.preventDefault();
-        dispatch({ type: 'move', direction, active: false });
+        dispatch({ type: 'move', direction: moveDirection, active: false });
+      }
+
+      const rotationDirection =
+        event.code === 'KeyQ' || event.code === 'ArrowDown'
+          ? -1
+          : event.code === 'KeyE' || event.code === 'ArrowUp'
+            ? 1
+            : null;
+
+      if (rotationDirection !== null && activeRotations.delete(rotationDirection)) {
+        event.preventDefault();
+        dispatch({ type: 'rotate', direction: rotationDirection, active: false });
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('blur', releaseDirections);
+    window.addEventListener('blur', releaseControls);
 
     return () => {
-      releaseDirections();
+      releaseControls();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('blur', releaseDirections);
+      window.removeEventListener('blur', releaseControls);
     };
   }, [bridge]);
 
@@ -215,11 +255,20 @@ export function GameShell({ bridge }: GameShellProps) {
     bridge.dispatch({ type: 'restart' });
   };
   const copy = copyFor(language);
+  const playerAnimal = getAnimalPreview(playerAnimalId, language);
+  const opponentAnimal = getAnimalPreview(opponentAnimalFor(playerAnimalId), language);
 
   return (
     <main className="app-viewport">
       <section className="game-shell" aria-label={copy.appLabel}>
-        <GameHud snapshot={snapshot} language={language} onPause={() => bridge.dispatch({ type: 'pause' })} />
+        <GameHud
+          snapshot={snapshot}
+          language={language}
+          playerAnimal={playerAnimal}
+          opponentAnimal={opponentAnimal}
+          onPause={() => bridge.dispatch({ type: 'pause' })}
+          onSwap={() => bridge.dispatch({ type: 'swap' })}
+        />
 
         <div className="game-stage" data-game-phase={snapshot.phase}>
           <div
@@ -227,6 +276,13 @@ export function GameShell({ bridge }: GameShellProps) {
             className="game-stage__mount"
             id="stackimals-game"
             aria-label={copy.stageLabel}
+          />
+
+          <TablePlayers
+            playerAnimal={playerAnimal}
+            opponentAnimal={opponentAnimal}
+            turn={snapshot.turn}
+            language={language}
           />
 
           {snapshot.phase === 'loading' && (
@@ -245,7 +301,7 @@ export function GameShell({ bridge }: GameShellProps) {
         <GameControls
           language={language}
           enabled={canControl}
-          onRotate={(direction) => bridge.dispatch({ type: 'rotate', direction })}
+          onRotate={(direction, active) => bridge.dispatch({ type: 'rotate', direction, active })}
           onDrop={() => bridge.dispatch({ type: 'drop' })}
         />
 
@@ -254,6 +310,8 @@ export function GameShell({ bridge }: GameShellProps) {
           restartConfirmationOpen={restartConfirmationOpen}
           animalRosterOpen={animalRosterOpen}
           language={language}
+          playerAnimalId={playerAnimalId}
+          opponentAnimalId={opponentAnimal.id}
           onResume={resumeGame}
           onOpenAnimalRoster={() => setAnimalRosterOpen(true)}
           onCloseAnimalRoster={() => setAnimalRosterOpen(false)}
@@ -261,6 +319,7 @@ export function GameShell({ bridge }: GameShellProps) {
           onCancelRestart={() => setRestartConfirmationOpen(false)}
           onConfirmRestart={confirmRestart}
           onLanguageChange={setLanguage}
+          onPlayerAnimalChange={setPlayerAnimalId}
         />
 
         <div className="rotate-device" role="status">

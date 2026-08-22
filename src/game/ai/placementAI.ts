@@ -34,6 +34,24 @@ export interface AIPlacementDecision {
   readonly usedFallback: boolean;
 }
 
+/** Swap only when the queued alternative is materially safer or more useful. */
+export function shouldSwapAIAnimal(
+  current: AIPlacementDecision,
+  alternative: AIPlacementDecision,
+): boolean {
+  if (current.usedFallback) {
+    return !alternative.usedFallback;
+  }
+  if (alternative.usedFallback) {
+    return false;
+  }
+
+  const supportGain = alternative.supportRatio - current.supportRatio;
+  const scoreGain = alternative.score - current.score;
+  return supportGain >= 0.14
+    || (supportGain >= -0.02 && scoreGain >= 0.8);
+}
+
 interface Candidate {
   readonly x: number;
   readonly angle: number;

@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
-import type { AnimalDefinition } from '../../game/data/animals';
+import { getPhysicsCollision, type AnimalDefinition } from '../../game/data/animals';
 
 export interface MatterPoint {
   readonly x: number;
@@ -91,9 +91,11 @@ export function createAnimalMatterBody(
   x = 0,
   y = 0,
   angleDeg = 0,
-  options: { readonly isStatic?: boolean } = {},
+  options: {
+    readonly isStatic?: boolean;
+  } = {},
 ): TestMatterBody {
-  const outline = definition.collision.outline.map((point) => ({ x: point.x, y: point.y }));
+  const outline = getPhysicsCollision(definition).outline.map((point) => ({ x: point.x, y: point.y }));
   const body = Bodies.fromVertices(x, y, outline, {
     isStatic: options.isStatic ?? false,
     friction: definition.physics.friction,

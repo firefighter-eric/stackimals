@@ -1,4 +1,4 @@
-import type { AnimalDefinition } from '../../game/data/animals';
+import { getPhysicsCollision, type AnimalDefinition } from '../../game/data/animals';
 import { childParts, createAnimalMatterBody, type MatterPoint } from './phaserMatter';
 import {
   decodeRgbaPngAlpha,
@@ -71,8 +71,9 @@ function alphaAtLogicalPoint(
   source: ReturnType<typeof decodeRgbaPngAlpha>,
   trim: PixelBounds,
 ): number {
-  const originX = definition.collision.textureOrigin.x * definition.display.width;
-  const originY = definition.collision.textureOrigin.y * definition.display.height;
+  const physicsCollision = getPhysicsCollision(definition);
+  const originX = physicsCollision.textureOrigin.x * definition.display.width;
+  const originY = physicsCollision.textureOrigin.y * definition.display.height;
   const sourceX = Math.max(
     trim.minX,
     Math.min(
@@ -108,6 +109,7 @@ function toLogicalBounds(
 }
 
 export function collectColliderAlphaMetrics(definition: AnimalDefinition): ColliderAlphaMetrics {
+  const physicsCollision = getPhysicsCollision(definition);
   const sourceUrl = new URL(`../../../assets-src/generated-v1/${definition.id}.png`, import.meta.url);
   const webpUrl = new URL(`../../../public${definition.texturePath}`, import.meta.url);
   const source = decodeRgbaPngAlpha(sourceUrl);
@@ -122,8 +124,8 @@ export function collectColliderAlphaMetrics(definition: AnimalDefinition): Colli
   const polygons = childParts(body).map((part) => part.vertices);
   const colliderBounds = boundsFromPoints(polygons.flat());
   const rawOpaqueBounds = toLogicalBounds(meaningfulAlpha, sourceTrim, definition.display);
-  const originX = definition.collision.textureOrigin.x * definition.display.width;
-  const originY = definition.collision.textureOrigin.y * definition.display.height;
+  const originX = physicsCollision.textureOrigin.x * definition.display.width;
+  const originY = physicsCollision.textureOrigin.y * definition.display.height;
   const opaqueBounds = {
     minX: rawOpaqueBounds.minX - originX,
     maxX: rawOpaqueBounds.maxX - originX,

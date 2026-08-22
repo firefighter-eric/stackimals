@@ -47,6 +47,39 @@ export class SeededAnimalQueue {
     return animal;
   }
 
+  /**
+   * Replace the already-drawn current animal with the next queued animal and
+   * defer the replaced animal to the back of the active bag.
+   */
+  exchange(current: AnimalId): AnimalId {
+    if (!this.animalIds.includes(current)) {
+      throw new RangeError('Exchanged animal must belong to this queue.');
+    }
+    if (this.animalIds.length === 1) {
+      return current;
+    }
+
+    if (this.remaining.length === 0) {
+      this.refill();
+      // A newly refilled bag contains the current animal again. Remove that
+      // copy before deferring it so the bag still contains one of each animal.
+      const duplicateIndex = this.remaining.indexOf(current);
+      if (duplicateIndex >= 0) {
+        this.remaining.splice(duplicateIndex, 1);
+      }
+    }
+
+    const replacement = this.remaining.shift();
+    if (replacement === undefined) {
+      throw new Error('Animal queue could not provide an exchange replacement.');
+    }
+
+    this.remaining.push(current);
+    this.previous = replacement;
+    this.draws += 1;
+    return replacement;
+  }
+
   /** Read upcoming animals without advancing the live queue. */
   preview(count: number): readonly AnimalId[] {
     if (!Number.isInteger(count) || count < 0) {

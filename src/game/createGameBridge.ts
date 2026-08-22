@@ -1,6 +1,40 @@
 import Phaser from 'phaser';
 import type { GameBridge, GameCommand, GameSnapshot } from '../ui/gameBridge';
+import { renderScaleForDevicePixelRatio } from './core/renderResolution';
 import { StackimalsScene, STACKIMALS_GAME_SIZE } from './scenes/StackimalsScene';
+
+function configureHighDensityCanvasHost(container: HTMLElement): () => void {
+  const stage = container.parentElement;
+
+  if (stage === null) {
+    return () => undefined;
+  }
+
+  const update = () => {
+    const stageBounds = stage.getBoundingClientRect();
+    const renderScale = renderScaleForDevicePixelRatio(window.devicePixelRatio);
+
+    container.style.width = `${stageBounds.width * renderScale}px`;
+    container.style.height = `${stageBounds.height * renderScale}px`;
+    container.style.setProperty('--game-canvas-display-scale', String(1 / renderScale));
+  };
+
+  update();
+
+  const resizeObserver = typeof ResizeObserver === 'undefined'
+    ? null
+    : new ResizeObserver(update);
+  resizeObserver?.observe(stage);
+  window.addEventListener('resize', update, { passive: true });
+
+  return () => {
+    resizeObserver?.disconnect();
+    window.removeEventListener('resize', update);
+    container.style.removeProperty('width');
+    container.style.removeProperty('height');
+    container.style.removeProperty('--game-canvas-display-scale');
+  };
+}
 
 class PhaserGameBridge implements GameBridge {
   private game: Phaser.Game | null = null;
@@ -13,6 +47,8 @@ class PhaserGameBridge implements GameBridge {
       this.game = null;
       this.scene = null;
     }
+
+    const cleanupHighDensityCanvasHost = configureHighDensityCanvasHost(container);
 
     const scene = new StackimalsScene({
       publish: publishSnapshot,
@@ -44,8 +80,10 @@ class PhaserGameBridge implements GameBridge {
         powerPreference: 'high-performance',
       },
       scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
+        // Fill the whole responsive stage. The scene camera preserves the
+        // fixed game-world scale and exposes any extra space at the sides.
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.NO_CENTER,
         width: STACKIMALS_GAME_SIZE.width,
         height: STACKIMALS_GAME_SIZE.height,
       },
@@ -86,6 +124,7 @@ class PhaserGameBridge implements GameBridge {
       this.game?.destroy(true);
       this.game = null;
       container.replaceChildren();
+      cleanupHighDensityCanvasHost();
     };
   }
 

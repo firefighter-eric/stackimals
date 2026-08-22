@@ -49,6 +49,28 @@ describe('SeededAnimalQueue', () => {
     expect(queue.drawCount).toBe(0);
     expect(Array.from({ length: 5 }, () => queue.next())).toEqual(preview);
   });
+
+  it('exchanges the current animal and defers it without losing the bag', () => {
+    const animalIds = ['bear', 'cat', 'rabbit'] as const;
+    const queue = new SeededAnimalQueue('swap-bag', animalIds);
+    const current = queue.next();
+    const nextBeforeSwap = queue.preview(2);
+    const replacement = queue.exchange(current);
+
+    expect(replacement).toBe(nextBeforeSwap[0]);
+    expect(queue.drawCount).toBe(2);
+    expect(new Set([replacement, ...queue.preview(2)])).toEqual(new Set(animalIds));
+    expect(queue.preview(2).at(-1)).toBe(current);
+  });
+
+  it('does not repeat the same animal when exchanging at a bag boundary', () => {
+    const animalIds = ['bear', 'cat', 'rabbit'] as const;
+    const queue = new SeededAnimalQueue('swap-boundary', animalIds);
+    const drawn = animalIds.map(() => queue.next());
+    const current = drawn.at(-1)!;
+
+    expect(queue.exchange(current)).not.toBe(current);
+  });
 });
 
 describe('animal data', () => {
@@ -86,6 +108,13 @@ describe('animal data', () => {
       expect(Object.values(english).every((value) => value.length > 0)).toBe(true);
       expect(chinese.name).toBe(animal.nameZh);
       expect(english.name).toBe(animal.name);
+    }
+  });
+
+  it('uses low-rebound, quickly damped wooden impact tuning', () => {
+    for (const animal of ANIMALS) {
+      expect(animal.physics.restitution, `${animal.id}: wooden restitution`).toBeLessThanOrEqual(0.012);
+      expect(animal.physics.frictionAir, `${animal.id}: impact damping`).toBeGreaterThanOrEqual(0.022);
     }
   });
 });

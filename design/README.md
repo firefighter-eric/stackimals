@@ -25,6 +25,9 @@ animal was generated separately with this shared direction:
 > side view, thick dark-blue ink outline, slightly imperfect carved edge, warm storybook colors,
 > centered and isolated on a transparent background, no text, no frame, no shadow, no extra props.
 
-The background and platform use the same paper-cut/painted-wood language. Runtime files in
-`public/assets/game/` are trimmed and optimized WebP derivatives; collision geometry is authored
-separately in TypeScript and is never inferred from image alpha at runtime.
+The portrait background, 16:9 desktop background, and platform use the same paper-cut/painted-wood
+language. Runtime files in `public/assets/game/` are optimized WebP derivatives and may retain
+intentional transparent padding. The desktop background is a wide continuation of the accepted
+mountain-valley scene so landscape layouts do not have to enlarge and crop the portrait source.
+Collision outlines are traced from source alpha offline, reviewed, and committed as TypeScript data;
+the runtime never infers collision geometry from image alpha.
