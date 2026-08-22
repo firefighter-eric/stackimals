@@ -48,7 +48,8 @@ export type GameCommand =
   | { type: 'pause' }
   | { type: 'resume' }
   | { type: 'restart' }
-  | { type: 'setLanguage'; language: GameLanguage };
+  | { type: 'setLanguage'; language: GameLanguage }
+  | { type: 'setGuideLines'; enabled: boolean };
 
 export interface GameBridge {
   mount(
