@@ -7,6 +7,7 @@ interface GameHudProps {
   language: GameLanguage;
   playerAnimal: AnimalPreview;
   opponentAnimal: AnimalPreview;
+  status: string;
   onPause: () => void;
   onSwap: () => void;
 }
@@ -69,16 +70,20 @@ function AvatarCard({
 function TurnLight({ snapshot, language }: { snapshot: GameSnapshot; language: GameLanguage }) {
   const humanIsActive = snapshot.turn === 'human';
   const copy = copyFor(language);
+  const turnLabel = humanIsActive ? copy.yourTurn : copy.miloTurn;
 
   return (
-    <div className="turn-status" aria-label={humanIsActive ? copy.yourTurn : copy.miloTurn}>
-      <span className={`turn-light turn-light--human${humanIsActive ? ' is-active' : ''}`} />
-      <span className={`turn-light turn-light--ai${humanIsActive ? '' : ' is-active'}`} />
+    <div className={`turn-status turn-status--${snapshot.turn}`} aria-label={turnLabel}>
+      <span className="turn-status__lights" aria-hidden="true">
+        <span className={`turn-light turn-light--human${humanIsActive ? ' is-active' : ''}`} />
+        <span className={`turn-light turn-light--ai${humanIsActive ? '' : ' is-active'}`} />
+      </span>
+      <strong>{turnLabel}</strong>
     </div>
   );
 }
 
-export function GameHud({ snapshot, language, playerAnimal, opponentAnimal, onPause, onSwap }: GameHudProps) {
+export function GameHud({ snapshot, language, playerAnimal, opponentAnimal, status, onPause, onSwap }: GameHudProps) {
   const copy = copyFor(language);
   const pauseDisabled =
     snapshot.phase === 'loading' ||
@@ -87,7 +92,7 @@ export function GameHud({ snapshot, language, playerAnimal, opponentAnimal, onPa
 
   return (
     <header className="game-hud">
-      <div className="game-hud__title-row">
+      <div className="scoreboard">
         <button
           className="icon-button pause-button"
           type="button"
@@ -98,19 +103,6 @@ export function GameHud({ snapshot, language, playerAnimal, opponentAnimal, onPa
           <PauseIcon />
         </button>
 
-        <div className="logo-plaque" aria-label={copy.gameTitle}>
-          <span className="logo-leaf logo-leaf--left" aria-hidden="true">◆</span>
-          <span className="logo-plaque__title">{copy.gameTitle}</span>
-          <span className="logo-leaf logo-leaf--right" aria-hidden="true">◆</span>
-        </div>
-
-        <div className="game-hud__round" aria-label={copy.roundLabel(snapshot.round)}>
-          <span>{copy.round}</span>
-          <strong>{snapshot.round}</strong>
-        </div>
-      </div>
-
-      <div className="scoreboard">
         <AvatarCard
           label={copy.you}
           assetUrl={playerAnimal.assetUrl}
@@ -134,37 +126,42 @@ export function GameHud({ snapshot, language, playerAnimal, opponentAnimal, onPa
           swapsRemaining={snapshot.swapsAi}
           swapsLabel={copy.swapsRemaining}
         />
+
+        <div className="game-hud__round" aria-label={copy.roundLabel(snapshot.round)}>
+          <span>{copy.round}</span>
+          <strong>{snapshot.round}</strong>
+        </div>
       </div>
 
       <div
-        className="next-animal"
+        className={`next-animal next-animal--${snapshot.turn}`}
         aria-live="polite"
         aria-label={language === 'zh'
           ? `${snapshot.currentAnimal.name}，${snapshot.currentAnimal.trait}：${snapshot.currentAnimal.tip}`
           : `${snapshot.currentAnimal.name}, ${snapshot.currentAnimal.trait}: ${snapshot.currentAnimal.tip}`}
       >
-        <img src={snapshot.currentAnimal.assetUrl} alt="" draggable={false} />
-        <span className="next-animal__copy">
-          <small>{copy.nextAnimal} · {snapshot.turn === 'human' ? copy.you : 'Milo'}</small>
-          <strong>{snapshot.currentAnimal.name}</strong>
+        <span className="next-animal__identity">
+          <img src={snapshot.currentAnimal.assetUrl} alt="" draggable={false} />
+          <span className="next-animal__copy">
+            <small>{copy.nextAnimal} · {snapshot.turn === 'human' ? copy.you : 'Milo'}</small>
+            <strong>{snapshot.currentAnimal.name}</strong>
+          </span>
         </span>
-        <span className="next-animal__meta">
-          <em>{snapshot.currentAnimal.trait}</em>
-          {snapshot.turn === 'human' && (
-            <button
-              className="next-animal__swap"
-              type="button"
-              disabled={snapshot.phase !== 'humanAiming' || snapshot.swapsHuman <= 0}
-              onClick={onSwap}
-              aria-keyshortcuts="R"
-              title={`R · ${copy.swapAnimal}`}
-              aria-label={copy.swapAnimalWithCount(snapshot.swapsHuman)}
-            >
-              {copy.swapAnimal}
-              <strong>{snapshot.swapsHuman}</strong>
-            </button>
-          )}
-        </span>
+        <p className="next-animal__status">{status}</p>
+        {snapshot.turn === 'human' && (
+          <button
+            className="next-animal__swap"
+            type="button"
+            disabled={snapshot.phase !== 'humanAiming' || snapshot.swapsHuman <= 0}
+            onClick={onSwap}
+            aria-keyshortcuts="R"
+            title={`R · ${copy.swapAnimal}`}
+            aria-label={copy.swapAnimalWithCount(snapshot.swapsHuman)}
+          >
+            {copy.swapAnimal}
+            <strong>{snapshot.swapsHuman}</strong>
+          </button>
+        )}
       </div>
     </header>
   );

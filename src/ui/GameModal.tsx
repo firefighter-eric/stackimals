@@ -10,6 +10,7 @@ interface GameModalProps {
   restartConfirmationOpen: boolean;
   animalRosterOpen: boolean;
   language: GameLanguage;
+  guideLinesEnabled: boolean;
   playerAnimalId: AnimalId;
   opponentAnimalId: AnimalId;
   onResume: () => void;
@@ -19,6 +20,7 @@ interface GameModalProps {
   onCancelRestart: () => void;
   onConfirmRestart: () => void;
   onLanguageChange: (language: GameLanguage) => void;
+  onGuideLinesChange: (enabled: boolean) => void;
   onPlayerAnimalChange: (animal: AnimalId) => void;
 }
 
@@ -90,6 +92,7 @@ export function GameModal({
   restartConfirmationOpen,
   animalRosterOpen,
   language,
+  guideLinesEnabled,
   playerAnimalId,
   opponentAnimalId,
   onResume,
@@ -99,6 +102,7 @@ export function GameModal({
   onCancelRestart,
   onConfirmRestart,
   onLanguageChange,
+  onGuideLinesChange,
   onPlayerAnimalChange,
 }: GameModalProps) {
   const copy = copyFor(language);
@@ -219,7 +223,11 @@ export function GameModal({
     return (
       <div className="modal-backdrop" role="presentation">
         <section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="pause-title">
-          <span className="game-modal__pause-mark" aria-hidden="true"><i /><i /></span>
+          <div className="logo-plaque game-modal__brand" aria-label={copy.gameTitle}>
+            <span className="logo-leaf logo-leaf--left" aria-hidden="true">◆</span>
+            <span className="logo-plaque__title">{copy.gameTitle}</span>
+            <span className="logo-leaf logo-leaf--right" aria-hidden="true">◆</span>
+          </div>
           <p className="game-modal__eyebrow">{copy.settingsEyebrow}</p>
           <h2 id="pause-title">{copy.pausedTitle}</h2>
           <p>{copy.pausedBody}</p>
@@ -243,6 +251,23 @@ export function GameModal({
                 {copy.english}
               </button>
             </div>
+          </div>
+          <div className="guide-setting">
+            <span className="guide-setting__copy">
+              <strong id="guide-setting-label">{copy.guideLines}</strong>
+              <small>{copy.guideLinesBody}</small>
+            </span>
+            <button
+              type="button"
+              className={`guide-setting__toggle${guideLinesEnabled ? ' is-active' : ''}`}
+              role="switch"
+              aria-checked={guideLinesEnabled}
+              aria-labelledby="guide-setting-label"
+              onClick={() => onGuideLinesChange(!guideLinesEnabled)}
+            >
+              <span>{guideLinesEnabled ? copy.guideLinesOn : copy.guideLinesOff}</span>
+              <i aria-hidden="true" />
+            </button>
           </div>
           <div className="identity-setting">
             <span id="identity-setting-label">{copy.playerIdentity}</span>

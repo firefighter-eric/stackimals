@@ -4,6 +4,7 @@ import { createInitialGameSnapshot, getAnimalPreview } from './gameBridge';
 import { GameControls } from './GameControls';
 import { GameHud } from './GameHud';
 import { GameModal } from './GameModal';
+import { readStoredGuideLines, storeGuideLines } from './gamePreferences';
 import { copyFor, readStoredLanguage, storeLanguage } from './i18n';
 import {
   opponentAnimalFor,
@@ -54,6 +55,7 @@ function statusCopy(snapshot: GameSnapshot, language: GameLanguage) {
 export function GameShell({ bridge }: GameShellProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [language, setLanguage] = useState<GameLanguage>(() => readStoredLanguage());
+  const [guideLinesEnabled, setGuideLinesEnabled] = useState(() => readStoredGuideLines());
   const [playerAnimalId, setPlayerAnimalId] = useState<AnimalId>(() => readStoredPlayerAnimal());
   const initialSnapshotRef = useRef<GameSnapshot>(createInitialGameSnapshot(language));
   const snapshotRef = useRef<GameSnapshot>(initialSnapshotRef.current);
@@ -106,6 +108,11 @@ export function GameShell({ bridge }: GameShellProps) {
   useEffect(() => {
     storePlayerAnimal(playerAnimalId);
   }, [playerAnimalId]);
+
+  useEffect(() => {
+    storeGuideLines(guideLinesEnabled);
+    bridge.dispatch({ type: 'setGuideLines', enabled: guideLinesEnabled });
+  }, [bridge, guideLinesEnabled]);
 
   useEffect(() => {
     const activeMoves = new Set<-1 | 1>();
@@ -266,6 +273,7 @@ export function GameShell({ bridge }: GameShellProps) {
           language={language}
           playerAnimal={playerAnimal}
           opponentAnimal={opponentAnimal}
+          status={statusCopy(snapshot, language)}
           onPause={() => bridge.dispatch({ type: 'pause' })}
           onSwap={() => bridge.dispatch({ type: 'swap' })}
         />
@@ -291,11 +299,6 @@ export function GameShell({ bridge }: GameShellProps) {
               {copy.loading}
             </div>
           )}
-
-          <div className={`stage-message stage-message--${snapshot.turn}`} aria-live="polite">
-            <span aria-hidden="true" />
-            {statusCopy(snapshot, language)}
-          </div>
         </div>
 
         <GameControls
@@ -310,6 +313,7 @@ export function GameShell({ bridge }: GameShellProps) {
           restartConfirmationOpen={restartConfirmationOpen}
           animalRosterOpen={animalRosterOpen}
           language={language}
+          guideLinesEnabled={guideLinesEnabled}
           playerAnimalId={playerAnimalId}
           opponentAnimalId={opponentAnimal.id}
           onResume={resumeGame}
@@ -319,6 +323,7 @@ export function GameShell({ bridge }: GameShellProps) {
           onCancelRestart={() => setRestartConfirmationOpen(false)}
           onConfirmRestart={confirmRestart}
           onLanguageChange={setLanguage}
+          onGuideLinesChange={setGuideLinesEnabled}
           onPlayerAnimalChange={setPlayerAnimalId}
         />
 

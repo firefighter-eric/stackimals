@@ -69,6 +69,7 @@ interface TestSnapshot {
   readonly currentAnimal: AnimalId;
   readonly swapsHuman: number;
   readonly swapsAi: number;
+  readonly guideLinesEnabled: boolean;
   readonly previewAngle: number | null;
   readonly previewPosition: { readonly x: number; readonly y: number } | null;
   readonly bodies: readonly StackBodySnapshot[];
@@ -188,7 +189,9 @@ export class StackimalsScene extends Phaser.Scene {
   private stability = new StabilityDetector();
   private records: StackimalRecord[] = [];
   private preview: Phaser.GameObjects.Image | null = null;
+  private dangerGuide: Phaser.GameObjects.Graphics | null = null;
   private aimGuide: Phaser.GameObjects.Graphics | null = null;
+  private guideLinesEnabled = false;
   private currentAnimal: AnimalId = 'rabbit';
   private actor: Actor = 'player';
   private phase: MatchPhase = 'ready';
@@ -281,6 +284,13 @@ export class StackimalsScene extends Phaser.Scene {
   }
 
   handleCommand(command: GameCommand): void {
+    if (command.type === 'setGuideLines') {
+      this.guideLinesEnabled = command.enabled;
+      this.dangerGuide?.setVisible(command.enabled);
+      this.drawAimGuide();
+      return;
+    }
+
     if (command.type === 'setLanguage') {
       this.language = command.language;
       this.publish();
@@ -351,6 +361,7 @@ export class StackimalsScene extends Phaser.Scene {
     this.stability = new StabilityDetector();
     this.records = [];
     this.preview = null;
+    this.dangerGuide = null;
     this.aimGuide = null;
     this.actor = 'player';
     this.phase = 'ready';
@@ -381,6 +392,8 @@ export class StackimalsScene extends Phaser.Scene {
     for (let x = 12; x < GAME_WIDTH - 12; x += 22) {
       danger.lineBetween(x, DANGER_Y, Math.min(x + 11, GAME_WIDTH - 12), DANGER_Y);
     }
+    danger.setVisible(this.guideLinesEnabled);
+    this.dangerGuide = danger;
 
     this.aimGuide = this.add.graphics().setDepth(4);
 
@@ -564,7 +577,13 @@ export class StackimalsScene extends Phaser.Scene {
   private drawAimGuide(): void {
     const guide = this.aimGuide;
     guide?.clear();
-    if (guide === null || this.preview === null || this.actor !== 'player' || this.phase !== 'aiming') {
+    if (
+      !this.guideLinesEnabled ||
+      guide === null ||
+      this.preview === null ||
+      this.actor !== 'player' ||
+      this.phase !== 'aiming'
+    ) {
       return;
     }
 
@@ -946,6 +965,7 @@ export class StackimalsScene extends Phaser.Scene {
         currentAnimal: this.currentAnimal,
         swapsHuman: this.swapsPlayer,
         swapsAi: this.swapsAi,
+        guideLinesEnabled: this.guideLinesEnabled,
         previewAngle: this.preview?.angle ?? null,
         previewPosition: this.preview === null
           ? null
