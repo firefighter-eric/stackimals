@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ANIMALS } from '../game/data/animals';
+import { WOOD_PLATFORM_PHYSICS } from '../game/data/woodPhysics';
 import {
   collectColliderAlphaMetrics,
   isConvexPolygon,
@@ -116,9 +117,7 @@ describe('animal collider regression', () => {
     const engine = createMatterEngine();
     const platform = createRectangle(0, 120, 294, 24, {
       isStatic: true,
-      friction: 0.9,
-      frictionStatic: 1,
-      restitution: 0.01,
+      ...WOOD_PLATFORM_PHYSICS,
     });
     const lower = createAnimalMatterBody(turtle, 0, 40);
     const upper = createAnimalMatterBody(bear, 0, -80);
@@ -147,9 +146,7 @@ describe('animal collider regression', () => {
       const engine = createMatterEngine();
       const platform = createRectangle(0, 180, 294, 24, {
         isStatic: true,
-        friction: 0.9,
-        frictionStatic: 1,
-        restitution: 0.01,
+        ...WOOD_PLATFORM_PHYSICS,
       });
       const impactAngle = animal.gameplay.role === 'challenge' ? -90 : 0;
       const body = createAnimalMatterBody(animal, 0, 0, impactAngle);

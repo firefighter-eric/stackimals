@@ -2,7 +2,15 @@ import Phaser from 'phaser';
 import { shouldSwapAIAnimal, StackingAI } from '../ai';
 import { SeededAnimalQueue, StabilityDetector, resolveFallOutcome } from '../core';
 import type { Actor, AnimalId, GameLanguage, MatchPhase, StackBodySnapshot } from '../core';
-import { ANIMALS, getAnimalCopy, getAnimalDefinition, getPhysicsCollision } from '../data';
+import {
+  ANIMALS,
+  WOOD_CONTACT_SLOP,
+  WOOD_PLATFORM_PHYSICS,
+  WOOD_SLEEP_THRESHOLD,
+  getAnimalCopy,
+  getAnimalDefinition,
+  getPhysicsCollision,
+} from '../data';
 import type { AnimalDefinition, AnimalRole } from '../data/animals';
 import type { GameCommand, GamePhase, GameSnapshot } from '../../ui/gameBridge';
 import { getAnimalPreview } from '../../ui/gameBridge';
@@ -390,9 +398,7 @@ export class StackimalsScene extends Phaser.Scene {
       {
         isStatic: true,
         label: 'stackimals-platform',
-        friction: 0.9,
-        frictionStatic: 1,
-        restitution: 0.01,
+        ...WOOD_PLATFORM_PHYSICS,
       },
     );
   }
@@ -659,7 +665,7 @@ export class StackimalsScene extends Phaser.Scene {
     image.setFriction(definition.physics.friction, definition.physics.frictionAir, definition.physics.frictionStatic);
     image.setBounce(definition.physics.restitution);
     image.setDensity(definition.physics.density);
-    image.setSleepThreshold(50);
+    image.setSleepThreshold(WOOD_SLEEP_THRESHOLD);
     image.setDepth(6);
 
     const id = `animal-${++this.bodySerial}`;
@@ -679,7 +685,7 @@ export class StackimalsScene extends Phaser.Scene {
       frictionStatic: definition.physics.frictionStatic,
       frictionAir: definition.physics.frictionAir,
       restitution: definition.physics.restitution,
-      slop: 0.01,
+      slop: WOOD_CONTACT_SLOP,
       label: `stackimals-${definition.id}`,
     }, true, 0.01, 1);
     this.matter.body.setAngle(body, Phaser.Math.DegToRad(angleDeg));
@@ -745,6 +751,14 @@ export class StackimalsScene extends Phaser.Scene {
     if (towerCrossedDanger) {
       this.finishMatch(this.actor === 'player' ? 'ai' : 'player', 'danger');
       return;
+    }
+
+    // The turn resolver already observed the whole tower below the strict
+    // quiet thresholds for 850ms. Latch those bodies to Matter sleeping so a
+    // residual solver correction cannot remain visible between turns. A later
+    // falling animal automatically wakes any sleeping body it hits.
+    for (const record of this.records) {
+      record.image.setToSleep();
     }
 
     const placedRecord = this.records.find((record) => record.id === this.currentDropId);

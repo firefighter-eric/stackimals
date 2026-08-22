@@ -78,11 +78,13 @@ ready → player aiming → dropping/settling
 - 重力：`x = 0`、`y = 1.05`。
 - runner：目标 `60fps`，单渲染帧最多补 `3` 次更新，最大帧时间 `50ms`。
 - solver：position `10`、velocity `8`、constraint `4` 次迭代。
-- animal body：启用 sleeping，sleep threshold `50`，碰撞 `slop = 0.01`。
-- 平台：friction `0.9`、frictionStatic `1`、restitution `0.01`。
-- 每只动物另有独立 density、friction、frictionStatic、restitution 和 frictionAir。
+- animal body：启用 sleeping，sleep threshold `20`（约三分之一秒近零运动后休眠），碰撞 `slop = 0.05`（Matter 默认容差，避免精细轮廓持续微修正）。猫、狐狸、兔子和浣熊使用贴合原图外缘的稳定代理轮廓，去掉会反复切换接触点的腿部窄缝。
+- 平台：friction `0.9`、frictionStatic `1.25`、restitution `0.006`；接触时动态摩擦取两物体较小值，所以普通动物仍由自身的低动态摩擦控制落地冲量，平台值仅为老虎等专属组合提供下限。
+- 每只动物另有独立 density、friction、frictionStatic、restitution 和 frictionAir。Matter 对复杂 body 的高动态摩擦可能不稳定，因此通常把碰撞阶段的 friction 控制在 `0.3–0.54`，近静止阶段使用 `2.6–3.6` 的 frictionStatic 乘数；老虎因复合轮廓求解稳定性使用单独组合。恢复系数范围为 `0.003–0.009`。这使动物落地时不会被过强切向冲量反复推开，但稳定后仍有足够木制咬合力；兔子与企鹅仍比乌龟、鳄鱼和刺猬更容易受不平衡力带动。
 
 修改这些参数会同时影响手感、AI 成功率、稳定时间和穿透深度。不能只凭单个截图调参；至少要运行几何/物理回归并手测低帧率、暂停恢复和高塔场景。
+
+每回合只有在整座塔连续通过稳定判定后，场景才调用 Matter sleeping 将静止状态锁住；后续动物碰撞会按 Matter 原生规则自动唤醒受撞物体。这一步只清除求解器残余微动，不吸附位置、不改角度，也不会阻止真实的连锁倒塌。
 
 ### 数值现实
 
@@ -248,7 +250,7 @@ AI 不会：
 - AI 只有启发式单步选择，没有 Matter rollout、难度档或自适应策略。
 - 当前有十五只动物，没有独立的内容配置工具。
 - 没有存档、排行榜、账号、联网、PWA、静音和设置。
-- 自动化测试覆盖纯规则、AI、十五只动物几何、兔子平地稳定性和代表性乌龟/小熊物理堆叠；尚未覆盖所有动物组合、所有连续角度和长时间高塔。
+- 自动化测试覆盖纯规则、AI、十五只动物几何、全部动物推荐姿态与合法离散角度的平地休眠、兔子近直立稳定性和代表性乌龟/小熊物理堆叠；尚未覆盖所有动物组合、所有连续角度和长时间高塔。
 - 项目目前没有 Playwright 端到端测试依赖；触屏、键盘、暂停、旋转屏幕和生产页面仍依靠手动浏览器验收。
 - alpha 回归从源 PNG 读取像素，但对最终 WebP 只核对尺寸；WebP 尺寸不变而透明通道损坏时可能漏报。
 - Matter 测试辅助引用 Phaser 包内的 Matter/poly-decomp 路径；升级已精确锁定的 Phaser `4.2.1` 时，需要先验证测试辅助仍对应运行时实现。

@@ -6,6 +6,7 @@ import { SeededRandom } from '../game/core/prng';
 import { StabilityDetector, isBodyAtRest } from '../game/core/stability';
 import { ANIMAL_IDS } from '../game/core/types';
 import { ANIMALS, getAnimalCopy } from '../game/data/animals';
+import { WOOD_PLATFORM_PHYSICS } from '../game/data/woodPhysics';
 
 describe('SeededRandom', () => {
   it('repeats the same sequence for the same string seed', () => {
@@ -113,9 +114,30 @@ describe('animal data', () => {
 
   it('uses low-rebound, quickly damped wooden impact tuning', () => {
     for (const animal of ANIMALS) {
-      expect(animal.physics.restitution, `${animal.id}: wooden restitution`).toBeLessThanOrEqual(0.012);
-      expect(animal.physics.frictionAir, `${animal.id}: impact damping`).toBeGreaterThanOrEqual(0.022);
+      expect(animal.physics.restitution, `${animal.id}: wooden restitution`).toBeLessThanOrEqual(0.009);
+      expect(animal.physics.frictionAir, `${animal.id}: impact damping`).toBeGreaterThanOrEqual(0.04);
+      expect(animal.physics.frictionAir, `${animal.id}: impact damping ceiling`).toBeLessThanOrEqual(0.06);
+      expect(animal.physics.friction, `${animal.id}: stable kinetic-friction floor`).toBeGreaterThanOrEqual(0.3);
+      const maximumStableKineticFriction = animal.id === 'tiger' ? 0.74 : 0.55;
+      const minimumStableStaticFriction = animal.id === 'tiger' ? 1.15 : 2.6;
+      expect(animal.physics.friction, `${animal.id}: stable kinetic-friction ceiling`).toBeLessThanOrEqual(
+        maximumStableKineticFriction,
+      );
+      expect(animal.physics.frictionStatic, `${animal.id}: wooden static friction`).toBeGreaterThanOrEqual(
+        minimumStableStaticFriction,
+      );
+      expect(
+        animal.physics.friction * animal.physics.frictionStatic,
+        `${animal.id}: near-rest wooden grip`,
+      ).toBeGreaterThanOrEqual(animal.id === 'tiger' ? 0.85 : 1.05);
+      expect(animal.physics.frictionStatic, `${animal.id}: static friction exceeds sliding`).toBeGreaterThan(
+        animal.physics.friction,
+      );
     }
+
+    expect(WOOD_PLATFORM_PHYSICS.friction).toBeLessThanOrEqual(0.9);
+    expect(WOOD_PLATFORM_PHYSICS.frictionStatic).toBeGreaterThanOrEqual(1.25);
+    expect(WOOD_PLATFORM_PHYSICS.restitution).toBeLessThanOrEqual(0.006);
   });
 });
 
