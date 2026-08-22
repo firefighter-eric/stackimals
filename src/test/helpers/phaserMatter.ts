@@ -2,6 +2,10 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
 import { getPhysicsCollision, type AnimalDefinition } from '../../game/data/animals';
+import {
+  WOOD_CONTACT_SLOP,
+  WOOD_SLEEP_THRESHOLD,
+} from '../../game/data/woodPhysics';
 
 export interface MatterPoint {
   readonly x: number;
@@ -102,14 +106,14 @@ export function createAnimalMatterBody(
     frictionStatic: definition.physics.frictionStatic,
     frictionAir: definition.physics.frictionAir,
     restitution: definition.physics.restitution,
-    slop: 0.01,
+    slop: WOOD_CONTACT_SLOP,
     label: `test-${definition.id}`,
   }, true, 0.01, 1);
   Body.setAngle(body, angleDeg * Math.PI / 180);
   if (!options.isStatic) {
     Body.setDensity(body, definition.physics.density);
   }
-  body.sleepThreshold = 50;
+  body.sleepThreshold = WOOD_SLEEP_THRESHOLD;
   return body;
 }
 

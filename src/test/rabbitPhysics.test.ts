@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { getAnimalDefinition } from '../game/data';
+import { WOOD_PLATFORM_PHYSICS } from '../game/data/woodPhysics';
 import {
   addToMatterWorld,
   childParts,
@@ -26,9 +27,7 @@ function simulateRabbitDrop(angle: number): DropResult {
   const engine = createMatterEngine();
   const platform = createRectangle(0, 548, 294, 24, {
     isStatic: true,
-    friction: 0.9,
-    frictionStatic: 1,
-    restitution: 0.01,
+    ...WOOD_PLATFORM_PHYSICS,
   });
   const body = createAnimalMatterBody(rabbit, 0, 96, angle);
   addToMatterWorld(engine, [platform, body]);
