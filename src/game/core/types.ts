@@ -28,9 +28,11 @@ export const ANIMAL_IDS = [
   'frog',
   'giraffe',
   'hedgehog',
+  'mouse',
   'penguin',
   'rabbit',
   'raccoon',
+  'tiger',
   'turtle',
 ] as const;
 

@@ -5,7 +5,10 @@ import { copyFor } from './i18n';
 interface GameHudProps {
   snapshot: GameSnapshot;
   language: GameLanguage;
+  playerAnimal: AnimalPreview;
+  opponentAnimal: AnimalPreview;
   onPause: () => void;
+  onSwap: () => void;
 }
 
 interface AnimalQueueProps {
@@ -36,12 +39,16 @@ function AvatarCard({
   isActive,
   score,
   placedLabel,
+  swapsRemaining,
+  swapsLabel,
 }: {
   label: string;
   assetUrl: string;
   isActive: boolean;
   score: number;
   placedLabel: (score: number) => string;
+  swapsRemaining: number;
+  swapsLabel: (remaining: number) => string;
 }) {
   return (
     <div className={`avatar-card${isActive ? ' avatar-card--active' : ''}`}>
@@ -49,6 +56,9 @@ function AvatarCard({
         <img src={assetUrl} alt="" draggable={false} />
         <span className="avatar-card__score" aria-label={placedLabel(score)}>
           {score}
+        </span>
+        <span className="avatar-card__swaps" aria-label={swapsLabel(swapsRemaining)}>
+          ↻{swapsRemaining}
         </span>
       </div>
       <span>{label}</span>
@@ -68,7 +78,7 @@ function TurnLight({ snapshot, language }: { snapshot: GameSnapshot; language: G
   );
 }
 
-export function GameHud({ snapshot, language, onPause }: GameHudProps) {
+export function GameHud({ snapshot, language, playerAnimal, opponentAnimal, onPause, onSwap }: GameHudProps) {
   const copy = copyFor(language);
   const pauseDisabled =
     snapshot.phase === 'loading' ||
@@ -88,9 +98,9 @@ export function GameHud({ snapshot, language, onPause }: GameHudProps) {
           <PauseIcon />
         </button>
 
-        <div className="logo-plaque" aria-label="Stackimals">
+        <div className="logo-plaque" aria-label={copy.gameTitle}>
           <span className="logo-leaf logo-leaf--left" aria-hidden="true">◆</span>
-          <span>STACKIMALS</span>
+          <span className="logo-plaque__title">{copy.gameTitle}</span>
           <span className="logo-leaf logo-leaf--right" aria-hidden="true">◆</span>
         </div>
 
@@ -102,11 +112,13 @@ export function GameHud({ snapshot, language, onPause }: GameHudProps) {
 
       <div className="scoreboard">
         <AvatarCard
-          label="YOU"
-          assetUrl="/assets/game/animals/fox.webp"
+          label={copy.you}
+          assetUrl={playerAnimal.assetUrl}
           score={snapshot.scoreHuman}
           isActive={snapshot.turn === 'human'}
           placedLabel={copy.placedCount}
+          swapsRemaining={snapshot.swapsHuman}
+          swapsLabel={copy.swapsRemaining}
         />
 
         <AnimalQueue animals={snapshot.upcomingHuman} label={copy.yourQueue} align="left" />
@@ -115,10 +127,12 @@ export function GameHud({ snapshot, language, onPause }: GameHudProps) {
 
         <AvatarCard
           label="MILO AI"
-          assetUrl="/assets/game/animals/bear.webp"
+          assetUrl={opponentAnimal.assetUrl}
           score={snapshot.scoreAi}
           isActive={snapshot.turn === 'ai'}
           placedLabel={copy.placedCount}
+          swapsRemaining={snapshot.swapsAi}
+          swapsLabel={copy.swapsRemaining}
         />
       </div>
 
@@ -134,7 +148,23 @@ export function GameHud({ snapshot, language, onPause }: GameHudProps) {
           <small>{copy.nextAnimal} · {snapshot.turn === 'human' ? copy.you : 'Milo'}</small>
           <strong>{snapshot.currentAnimal.name}</strong>
         </span>
-        <em>{snapshot.currentAnimal.trait}</em>
+        <span className="next-animal__meta">
+          <em>{snapshot.currentAnimal.trait}</em>
+          {snapshot.turn === 'human' && (
+            <button
+              className="next-animal__swap"
+              type="button"
+              disabled={snapshot.phase !== 'humanAiming' || snapshot.swapsHuman <= 0}
+              onClick={onSwap}
+              aria-keyshortcuts="R"
+              title={`R · ${copy.swapAnimal}`}
+              aria-label={copy.swapAnimalWithCount(snapshot.swapsHuman)}
+            >
+              {copy.swapAnimal}
+              <strong>{snapshot.swapsHuman}</strong>
+            </button>
+          )}
+        </span>
       </div>
     </header>
   );

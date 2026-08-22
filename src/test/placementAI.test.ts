@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { analyzeStack, chooseAIPlacement, rotatedDisplaySize } from '../game/ai/placementAI';
+import {
+  analyzeStack,
+  chooseAIPlacement,
+  rotatedDisplaySize,
+  shouldSwapAIAnimal,
+  type AIPlacementDecision,
+} from '../game/ai/placementAI';
 import { ANIMAL_IDS, type StackBodySnapshot } from '../game/core/types';
 import { getAnimalDefinition } from '../game/data/animals';
 
@@ -87,5 +93,36 @@ describe('chooseAIPlacement', () => {
       expect(animal.gameplay.preferredAngles).toContain(decision.angle);
       expect(decision.usedFallback).toBe(false);
     }
+  });
+});
+
+describe('AI animal swapping', () => {
+  const decision = (overrides: Partial<AIPlacementDecision>): AIPlacementDecision => ({
+    x: 195,
+    angle: 0,
+    score: 8,
+    supportRatio: 0.6,
+    towerCenterX: 195,
+    supportSpans: [{ minX: 100, maxX: 290 }],
+    usedFallback: false,
+    ...overrides,
+  });
+
+  it('uses a swap for a materially safer queued animal', () => {
+    expect(shouldSwapAIAnimal(
+      decision({ score: 7.2, supportRatio: 0.52 }),
+      decision({ score: 8.1, supportRatio: 0.72 }),
+    )).toBe(true);
+  });
+
+  it('keeps the current animal when the alternative is not meaningfully better', () => {
+    expect(shouldSwapAIAnimal(
+      decision({ score: 8, supportRatio: 0.76 }),
+      decision({ score: 8.2, supportRatio: 0.78 }),
+    )).toBe(false);
+    expect(shouldSwapAIAnimal(
+      decision({ usedFallback: false }),
+      decision({ usedFallback: true }),
+    )).toBe(false);
   });
 });

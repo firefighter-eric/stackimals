@@ -1,9 +1,11 @@
 import { ANIMAL_IDS, type AnimalId, type GameLanguage } from '../core/types';
 import {
   createCollisionGeometry,
+  createPhysicsCollisionShape,
   displaySizeForWidth,
   type CollisionFit,
   type CollisionGeometry,
+  type CollisionShape,
   type PixelVertex,
   type RectBounds,
   type Size,
@@ -58,10 +60,12 @@ export interface AnimalDefinition {
     readonly frictionAir: number;
   };
   readonly gameplay: AnimalGameplayProfile;
-  /** Degrees. The UI and AI must only choose values from this list. */
+  /** Discrete target angles used by the AI; player rotation is continuous. */
   readonly allowedAngles: readonly number[];
   /** Alpha-derived, renderer-independent collision geometry. */
   readonly collision: CollisionGeometry;
+  /** Optional simplified Matter shape for silhouettes prone to contact jitter. */
+  readonly physicsCollision?: CollisionShape;
 }
 
 const ANGLES_30 = [-150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150, 180] as const;
@@ -139,7 +143,7 @@ const GEOMETRY: Readonly<Record<
   ),
   crocodile: animalGeometry(
     { width: 600, height: 175 },
-    168,
+    196,
     { minX: 0, minY: 0, maxX: 600, maxY: 175 },
     [
       [467, 0], [497, 7], [515, 35], [549, 37], [565, 24], [582, 23], [600, 44], [597, 65],
@@ -192,13 +196,13 @@ const GEOMETRY: Readonly<Record<
     { alphaThreshold: 48, opaqueCoverage: 0.9762, outlinePrecision: 0.9984 },
   ),
   giraffe: animalGeometry(
-    { width: 331, height: 600 },
-    84,
-    { minX: 0, minY: 0, maxX: 331, maxY: 600 },
+    { width: 331, height: 608 },
+    96,
+    { minX: 0, minY: 0, maxX: 331, maxY: 605 },
     [
-      [218, 0], [283, 18], [284, 37], [271, 53], [331, 115], [329, 137], [311, 158], [251, 160],
-      [265, 370], [247, 494], [258, 597], [178, 594], [175, 476], [158, 470], [134, 512],
-      [149, 593], [71, 600], [58, 593], [54, 574], [56, 513], [70, 479], [63, 443], [54, 476],
+      [218, 0], [283, 18], [284, 37], [271, 53], [331, 115], [311, 158], [251, 160],
+      [265, 370], [247, 494], [258, 597], [206, 605], [178, 594], [175, 476], [158, 470], [134, 512],
+      [149, 593], [87, 605], [58, 593], [54, 574], [56, 513], [70, 479], [63, 443], [54, 476],
       [25, 492], [0, 485], [16, 437], [40, 430], [54, 400], [90, 367], [157, 336], [152, 314],
       [165, 295], [158, 269], [169, 254], [161, 229], [172, 211], [164, 184], [174, 170],
       [166, 150], [183, 93], [161, 68], [159, 42], [182, 28], [215, 49], [202, 17],
@@ -218,9 +222,23 @@ const GEOMETRY: Readonly<Record<
     ],
     { alphaThreshold: 48, opaqueCoverage: 0.9722, outlinePrecision: 0.9967 },
   ),
+  mouse: animalGeometry(
+    { width: 600, height: 395 },
+    60,
+    { minX: 32, minY: 1, maxX: 558, maxY: 373 },
+    [
+      [121, 7], [146, 28], [160, 59], [153, 117], [85, 197], [90, 222], [113, 239], [157, 238],
+      [183, 196], [237, 163], [314, 165], [280, 122], [276, 72], [302, 29], [344, 9], [388, 13],
+      [430, 54], [472, 42], [501, 56], [516, 86], [505, 133], [526, 169], [554, 181], [558, 202],
+      [514, 250], [449, 267], [414, 326], [444, 346], [436, 373], [375, 371], [349, 341], [297, 348],
+      [287, 373], [176, 373], [158, 350], [161, 297], [75, 283], [46, 259], [32, 225], [42, 167],
+      [110, 89], [100, 50], [46, 30], [51, 10], [70, 1],
+    ],
+    { alphaThreshold: 48, opaqueCoverage: 0.9746, outlinePrecision: 0.9859 },
+  ),
   penguin: animalGeometry(
     { width: 427, height: 600 },
-    74,
+    68,
     { minX: 0, minY: 0, maxX: 427, maxY: 600 },
     [
       [211, 0], [268, 4], [322, 31], [356, 71], [377, 136], [426, 167], [423, 192],
@@ -255,6 +273,20 @@ const GEOMETRY: Readonly<Record<
     ],
     { alphaThreshold: 48, opaqueCoverage: 0.9744, outlinePrecision: 0.9936 },
   ),
+  tiger: animalGeometry(
+    { width: 600, height: 385 },
+    132,
+    { minX: 35, minY: 1, maxX: 599, maxY: 382 },
+    [
+      [199, 6], [217, 42], [200, 61], [140, 67], [107, 89], [97, 137], [120, 158], [199, 128],
+      [360, 124], [392, 68], [395, 27], [415, 7], [443, 4], [476, 32], [496, 16], [518, 21],
+      [571, 112], [599, 140], [578, 190], [507, 219], [489, 254], [494, 320], [522, 352], [515, 374],
+      [384, 382], [368, 368], [353, 308], [267, 304], [254, 323], [278, 356], [261, 379], [198, 375],
+      [180, 316], [164, 328], [180, 357], [167, 380], [92, 374], [88, 317], [117, 225], [59, 194],
+      [38, 156], [35, 112], [68, 42], [115, 11], [153, 1],
+    ],
+    { alphaThreshold: 48, opaqueCoverage: 0.9768, outlinePrecision: 0.9859 },
+  ),
   turtle: animalGeometry(
     { width: 600, height: 335 },
     104,
@@ -281,7 +313,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-bear',
     texturePath: '/assets/game/animals/bear.webp',
     ...GEOMETRY.bear,
-    physics: { density: 0.00145, friction: 0.72, frictionStatic: 0.88, restitution: 0.025, frictionAir: 0.012 },
+    physics: { density: 0.00145, friction: 0.72, frictionStatic: 0.88, restitution: 0.006, frictionAir: 0.022 },
     gameplay: {
       role: 'foundation',
       tip: '身体宽厚，适合压住晃动的下层',
@@ -305,7 +337,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-bird',
     texturePath: '/assets/game/animals/bird.webp',
     ...GEOMETRY.bird,
-    physics: { density: 0.00105, friction: 0.63, frictionStatic: 0.8, restitution: 0.055, frictionAir: 0.015 },
+    physics: { density: 0.00105, friction: 0.63, frictionStatic: 0.8, restitution: 0.012, frictionAir: 0.028 },
     gameplay: {
       role: 'filler',
       tip: '身体最小，适合补上窄小缺口',
@@ -329,7 +361,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-cat',
     texturePath: '/assets/game/animals/cat.webp',
     ...GEOMETRY.cat,
-    physics: { density: 0.00115, friction: 0.7, frictionStatic: 0.86, restitution: 0.04, frictionAir: 0.013 },
+    physics: { density: 0.00115, friction: 0.7, frictionStatic: 0.86, restitution: 0.008, frictionAir: 0.024 },
     gameplay: {
       role: 'balancer',
       tip: '体型适中，适合衔接宽窄不同的层',
@@ -353,7 +385,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-crocodile',
     texturePath: '/assets/game/animals/crocodile.webp',
     ...GEOMETRY.crocodile,
-    physics: { density: 0.00132, friction: 0.8, frictionStatic: 0.94, restitution: 0.018, frictionAir: 0.012 },
+    physics: { density: 0.00132, friction: 0.8, frictionStatic: 0.94, restitution: 0.004, frictionAir: 0.022 },
     gameplay: {
       role: 'bridge',
       tip: '横放能跨越两个支点，竖放风险很高',
@@ -377,7 +409,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-elephant',
     texturePath: '/assets/game/animals/elephant.webp',
     ...GEOMETRY.elephant,
-    physics: { density: 0.00155, friction: 0.76, frictionStatic: 0.91, restitution: 0.02, frictionAir: 0.012 },
+    physics: { density: 0.00155, friction: 0.76, frictionStatic: 0.91, restitution: 0.004, frictionAir: 0.022 },
     gameplay: {
       role: 'foundation',
       tip: '重量最大，尽量靠近平台或塔的中心',
@@ -401,7 +433,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-fox',
     texturePath: '/assets/game/animals/fox.webp',
     ...GEOMETRY.fox,
-    physics: { density: 0.00118, friction: 0.68, frictionStatic: 0.84, restitution: 0.045, frictionAir: 0.013 },
+    physics: { density: 0.00118, friction: 0.68, frictionStatic: 0.84, restitution: 0.008, frictionAir: 0.024 },
     gameplay: {
       role: 'balancer',
       tip: '长尾能当支点，轻微倾斜更容易找平',
@@ -425,7 +457,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-frog',
     texturePath: '/assets/game/animals/frog.webp',
     ...GEOMETRY.frog,
-    physics: { density: 0.001, friction: 0.76, frictionStatic: 0.89, restitution: 0.045, frictionAir: 0.015 },
+    physics: { density: 0.001, friction: 0.76, frictionStatic: 0.89, restitution: 0.01, frictionAir: 0.028 },
     gameplay: {
       role: 'filler',
       tip: '贴进凹槽，可以填平不规则的表面',
@@ -449,7 +481,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-giraffe',
     texturePath: '/assets/game/animals/giraffe.webp',
     ...GEOMETRY.giraffe,
-    physics: { density: 0.0011, friction: 0.72, frictionStatic: 0.88, restitution: 0.035, frictionAir: 0.014 },
+    physics: { density: 0.0011, friction: 0.72, frictionStatic: 0.88, restitution: 0.006, frictionAir: 0.026 },
     gameplay: {
       role: 'challenge',
       tip: '竖放冲高度，横放更容易稳定',
@@ -473,7 +505,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-hedgehog',
     texturePath: '/assets/game/animals/hedgehog.webp',
     ...GEOMETRY.hedgehog,
-    physics: { density: 0.00125, friction: 0.79, frictionStatic: 0.92, restitution: 0.02, frictionAir: 0.014 },
+    physics: { density: 0.00125, friction: 0.79, frictionStatic: 0.92, restitution: 0.005, frictionAir: 0.026 },
     gameplay: {
       role: 'filler',
       tip: '尖背能卡住上层，也适合塞入浅凹槽',
@@ -483,6 +515,30 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
       moveSpeedMultiplier: 1.08,
       preferredAngles: [0],
       aiOrientationWeight: 0.7,
+    },
+    allowedAngles: ANGLES_45,
+  },
+  mouse: {
+    id: 'mouse',
+    name: 'Mouse',
+    nameZh: '小鼠',
+    sizeLabel: '迷你',
+    sizeLabelEn: 'Mini',
+    trait: '长尾填缝',
+    traitEn: 'Tail Filler',
+    assetKey: 'animal-mouse',
+    texturePath: '/assets/game/animals/mouse.webp',
+    ...GEOMETRY.mouse,
+    physics: { density: 0.001, friction: 0.68, frictionStatic: 0.84, restitution: 0.01, frictionAir: 0.028 },
+    gameplay: {
+      role: 'filler',
+      tip: '身体很小，长尾能勾住边缘或补上窄缝',
+      tipEn: 'Its tiny body fills narrow gaps while the long tail can catch an edge.',
+      settledCopy: '长尾勾住边缘，小身体填平了缝隙',
+      settledCopyEn: 'Its long tail caught the edge while its tiny body filled the gap.',
+      moveSpeedMultiplier: 1.2,
+      preferredAngles: [0],
+      aiOrientationWeight: 0.65,
     },
     allowedAngles: ANGLES_45,
   },
@@ -497,7 +553,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-penguin',
     texturePath: '/assets/game/animals/penguin.webp',
     ...GEOMETRY.penguin,
-    physics: { density: 0.00118, friction: 0.55, frictionStatic: 0.73, restitution: 0.055, frictionAir: 0.014 },
+    physics: { density: 0.00118, friction: 0.55, frictionStatic: 0.73, restitution: 0.01, frictionAir: 0.026 },
     gameplay: {
       role: 'challenge',
       tip: '圆肚容易滚，优先寻找 V 形凹槽',
@@ -521,7 +577,19 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-rabbit',
     texturePath: '/assets/game/animals/rabbit.webp',
     ...GEOMETRY.rabbit,
-    physics: { density: 0.0011, friction: 0.71, frictionStatic: 0.87, restitution: 0.04, frictionAir: 0.014 },
+    // The detailed silhouette decomposes into six small Matter parts whose
+    // competing flat-ground contacts keep waking one another. This two-lobe
+    // proxy preserves the visible bounds while giving the feet one stable base.
+    physicsCollision: createPhysicsCollisionShape(
+      GEOMETRY.rabbit.sourceSize,
+      GEOMETRY.rabbit.display,
+      [
+        [202, 320], [150, 106], [153, 42], [187, 5], [225, 4], [296, 8], [340, 21],
+        [478, 300], [463, 368], [400, 421], [437, 535], [421, 574], [153, 575],
+        [70, 549], [48, 497], [68, 459], [131, 365],
+      ],
+    ),
+    physics: { density: 0.0011, friction: 0.5, frictionStatic: 0.7, restitution: 0.008, frictionAir: 0.05 },
     gameplay: {
       role: 'challenge',
       tip: '直立能快速增高，横放会更安全',
@@ -545,7 +613,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-raccoon',
     texturePath: '/assets/game/animals/raccoon.webp',
     ...GEOMETRY.raccoon,
-    physics: { density: 0.00122, friction: 0.74, frictionStatic: 0.89, restitution: 0.035, frictionAir: 0.013 },
+    physics: { density: 0.00122, friction: 0.74, frictionStatic: 0.89, restitution: 0.007, frictionAir: 0.024 },
     gameplay: {
       role: 'balancer',
       tip: '尾巴能配重，稍微倾斜可修正重心',
@@ -555,6 +623,30 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
       moveSpeedMultiplier: 0.92,
       preferredAngles: [-30, 0, 30],
       aiOrientationWeight: 0.65,
+    },
+    allowedAngles: ANGLES_30,
+  },
+  tiger: {
+    id: 'tiger',
+    name: 'Tiger',
+    nameZh: '老虎',
+    sizeLabel: '大型',
+    sizeLabelEn: 'Large',
+    trait: '虎尾支撑',
+    traitEn: 'Tail Brace',
+    assetKey: 'animal-tiger',
+    texturePath: '/assets/game/animals/tiger.webp',
+    ...GEOMETRY.tiger,
+    physics: { density: 0.00128, friction: 0.71, frictionStatic: 0.87, restitution: 0.006, frictionAir: 0.024 },
+    gameplay: {
+      role: 'balancer',
+      tip: '身体宽长，卷起的虎尾能成为额外支点',
+      tipEn: 'Its broad body and curled tail can create an extra support point.',
+      settledCopy: '卷起的虎尾帮身体撑住了重心',
+      settledCopyEn: 'Its curled tail helped brace the center of gravity.',
+      moveSpeedMultiplier: 0.9,
+      preferredAngles: [-30, 0, 30],
+      aiOrientationWeight: 0.72,
     },
     allowedAngles: ANGLES_30,
   },
@@ -569,7 +661,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-turtle',
     texturePath: '/assets/game/animals/turtle.webp',
     ...GEOMETRY.turtle,
-    physics: { density: 0.00135, friction: 0.82, frictionStatic: 0.95, restitution: 0.018, frictionAir: 0.012 },
+    physics: { density: 0.00135, friction: 0.82, frictionStatic: 0.95, restitution: 0.004, frictionAir: 0.022 },
     gameplay: {
       role: 'foundation',
       tip: '低矮又防滑，适合铺出下一层平台',
@@ -588,6 +680,10 @@ export const ANIMALS: readonly AnimalDefinition[] = ANIMAL_IDS.map((id) => ANIMA
 
 export function getAnimalDefinition(id: AnimalId): AnimalDefinition {
   return ANIMAL_CATALOG[id];
+}
+
+export function getPhysicsCollision(definition: AnimalDefinition): CollisionShape {
+  return definition.physicsCollision ?? definition.collision;
 }
 
 export interface LocalizedAnimalCopy {

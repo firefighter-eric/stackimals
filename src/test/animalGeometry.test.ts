@@ -13,15 +13,17 @@ const EXPECTED_DISPLAY_WIDTHS = {
   bear: 148,
   bird: 56,
   cat: 88,
-  crocodile: 168,
+  crocodile: 196,
   elephant: 166,
   fox: 122,
   frog: 68,
-  giraffe: 84,
+  giraffe: 96,
   hedgehog: 76,
-  penguin: 74,
+  mouse: 60,
+  penguin: 68,
   rabbit: 76,
   raccoon: 108,
+  tiger: 132,
   turtle: 104,
 } as const;
 
@@ -53,6 +55,12 @@ describe('alpha-derived animal collision geometry', () => {
     expect(Math.max(...ANIMALS.map((animal) => (
       Math.max(animal.display.width, animal.display.height)
     )))).toBeLessThan(322);
+
+    const crocodile = ANIMALS.find((animal) => animal.id === 'crocodile')!;
+    const elephant = ANIMALS.find((animal) => animal.id === 'elephant')!;
+    const giraffe = ANIMALS.find((animal) => animal.id === 'giraffe')!;
+    expect(crocodile.display.width).toBeGreaterThan(elephant.display.width);
+    expect(giraffe.display.height).toBeGreaterThan(elephant.display.height);
   });
 
   it('provides simple clockwise concave outlines in displayed-texture coordinates', () => {
@@ -92,6 +100,13 @@ describe('alpha-derived animal collision geometry', () => {
       expect(animal.collision.textureOrigin.y).toBeGreaterThan(0);
       expect(animal.collision.textureOrigin.y).toBeLessThan(1);
     }
+  });
+
+  it('keeps the giraffe hooves inside the texture with transparent clearance below', () => {
+    const giraffe = ANIMALS.find((animal) => animal.id === 'giraffe')!;
+
+    expect(giraffe.collision.sourceAlphaBounds.maxY).toBeLessThan(giraffe.sourceSize.height);
+    expect(giraffe.sourceSize.height - giraffe.collision.sourceAlphaBounds.maxY).toBeGreaterThanOrEqual(3);
   });
 
   it('records high alpha-mask coverage for every simplified outline', () => {

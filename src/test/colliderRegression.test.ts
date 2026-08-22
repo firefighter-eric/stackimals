@@ -106,7 +106,7 @@ describe('animal collider regression', () => {
       expect(
         metrics.colliderCoveredByOpaque,
         `${animal.id}: collider backed by visible alpha`,
-      ).toBeGreaterThan(0.97);
+      ).toBeGreaterThan(animal.physicsCollision === undefined ? 0.97 : 0.9);
     }
   });
 
@@ -140,5 +140,41 @@ describe('animal collider regression', () => {
     expect(upper.position.y, 'the upper animal must not tunnel below the lower animal').toBeLessThan(lower.position.y);
     expect(maximumObservedDepth, 'transient animal overlap depth').toBeLessThan(4);
     expect(Math.max(0, ...finalDepths), 'settled animal overlap depth').toBeLessThan(1.2);
+  });
+
+  it('absorbs a platform impact without a rubber-like rebound', () => {
+    for (const animal of ANIMALS) {
+      const engine = createMatterEngine();
+      const platform = createRectangle(0, 180, 294, 24, {
+        isStatic: true,
+        friction: 0.9,
+        frictionStatic: 1,
+        restitution: 0.01,
+      });
+      const impactAngle = animal.gameplay.role === 'challenge' ? -90 : 0;
+      const body = createAnimalMatterBody(animal, 0, 0, impactAngle);
+      addToMatterWorld(engine, [platform, body]);
+
+      let madeContact = false;
+      let maximumUpwardSpeedAfterContact = 0;
+      for (let frame = 0; frame < 480; frame += 1) {
+        stepMatter(engine, 1);
+        if (compoundCollisionDepths(body, platform).length > 0) {
+          madeContact = true;
+        }
+        if (madeContact) {
+          maximumUpwardSpeedAfterContact = Math.max(
+            maximumUpwardSpeedAfterContact,
+            Math.max(0, -body.velocity.y),
+          );
+        }
+      }
+
+      expect(madeContact, `${animal.id}: reached the platform`).toBe(true);
+      expect(
+        maximumUpwardSpeedAfterContact,
+        `${animal.id}: upward speed after impact`,
+      ).toBeLessThan(0.75);
+    }
   });
 });

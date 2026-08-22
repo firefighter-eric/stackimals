@@ -31,6 +31,8 @@ export interface GameSnapshot {
   round: number;
   scoreHuman: number;
   scoreAi: number;
+  swapsHuman: number;
+  swapsAi: number;
   message: string;
   currentAnimal: AnimalPreview;
   upcomingHuman: readonly AnimalPreview[];
@@ -40,8 +42,9 @@ export interface GameSnapshot {
 
 export type GameCommand =
   | { type: 'move'; direction: -1 | 1; active: boolean }
-  | { type: 'rotate'; direction: -1 | 1 }
+  | { type: 'rotate'; direction: -1 | 1; active: boolean }
   | { type: 'drop' }
+  | { type: 'swap' }
   | { type: 'pause' }
   | { type: 'resume' }
   | { type: 'restart' }
@@ -80,6 +83,8 @@ export function createInitialGameSnapshot(language: GameLanguage): GameSnapshot 
     round: 1,
     scoreHuman: 0,
     scoreAi: 0,
+    swapsHuman: 3,
+    swapsAi: 3,
     message: '',
     currentAnimal: getAnimalPreview('rabbit', language),
     upcomingHuman: ['hedgehog', 'turtle', 'bird'].map((id) => getAnimalPreview(id as AnimalId, language)),

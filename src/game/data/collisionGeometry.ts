@@ -24,15 +24,18 @@ export interface CollisionFit {
   readonly outlinePrecision: number;
 }
 
+export interface CollisionShape {
+  readonly outline: readonly Point[];
+  /** Normalized texture origin matching the outline's area centroid. */
+  readonly textureOrigin: Point;
+}
+
 /**
  * A single simple concave outline in displayed-texture coordinates. Matter's
  * fromVertices can decompose it while preserving the relative position of all
  * generated convex chunks.
  */
-export interface CollisionGeometry {
-  readonly outline: readonly Point[];
-  /** Normalized texture origin matching the outline's area centroid. */
-  readonly textureOrigin: Point;
+export interface CollisionGeometry extends CollisionShape {
   readonly sourceAlphaBounds: RectBounds;
   readonly alphaBounds: RectBounds;
   readonly fit: CollisionFit;
@@ -209,9 +212,11 @@ export interface CollisionGeometryInput {
   readonly fit: CollisionFit;
 }
 
-/** Scale an alpha-derived source outline into the displayed texture space. */
-export function createCollisionGeometry(input: CollisionGeometryInput): CollisionGeometry {
-  const { sourceSize, display, sourceAlphaBounds, sourceOutline, fit } = input;
+function scaleAndValidateOutline(
+  sourceSize: Size,
+  display: Size,
+  sourceOutline: readonly PixelVertex[],
+): CollisionShape {
   if (sourceOutline.length < 3) {
     throw new RangeError('Collision outline requires at least three vertices.');
   }
@@ -245,6 +250,30 @@ export function createCollisionGeometry(input: CollisionGeometryInput): Collisio
       x: centroid.x / display.width,
       y: centroid.y / display.height,
     },
+  };
+}
+
+/**
+ * Scale a deliberately simplified runtime shape into displayed-texture space.
+ * This is useful when an intricate alpha outline creates unstable compound
+ * contacts in Matter while the visible sprite must retain its precise contour.
+ */
+export function createPhysicsCollisionShape(
+  sourceSize: Size,
+  display: Size,
+  sourceOutline: readonly PixelVertex[],
+): CollisionShape {
+  return scaleAndValidateOutline(sourceSize, display, sourceOutline);
+}
+
+/** Scale an alpha-derived source outline into the displayed texture space. */
+export function createCollisionGeometry(input: CollisionGeometryInput): CollisionGeometry {
+  const { sourceSize, display, sourceAlphaBounds, sourceOutline, fit } = input;
+  const shape = scaleAndValidateOutline(sourceSize, display, sourceOutline);
+  const scaleX = display.width / sourceSize.width;
+  const scaleY = display.height / sourceSize.height;
+  return {
+    ...shape,
     sourceAlphaBounds,
     alphaBounds: {
       minX: sourceAlphaBounds.minX * scaleX,

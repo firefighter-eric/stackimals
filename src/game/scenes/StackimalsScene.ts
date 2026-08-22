@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
-import { StackingAI } from '../ai';
+import { shouldSwapAIAnimal, StackingAI } from '../ai';
 import { SeededAnimalQueue, StabilityDetector, resolveFallOutcome } from '../core';
 import type { Actor, AnimalId, GameLanguage, MatchPhase, StackBodySnapshot } from '../core';
-import { ANIMALS, getAnimalCopy, getAnimalDefinition } from '../data';
+import { ANIMALS, getAnimalCopy, getAnimalDefinition, getPhysicsCollision } from '../data';
 import type { AnimalDefinition, AnimalRole } from '../data/animals';
 import type { GameCommand, GamePhase, GameSnapshot } from '../../ui/gameBridge';
 import { getAnimalPreview } from '../../ui/gameBridge';
 import { GameAudio } from '../audio/GameAudio';
+import { fitStageViewport } from '../core/stageViewport';
 
 const GAME_WIDTH = 390;
 const GAME_HEIGHT = 620;
@@ -15,12 +16,17 @@ const PLATFORM_Y = 548;
 const PLATFORM_WIDTH = 294;
 const PLATFORM_BODY_HEIGHT = 24;
 const AIM_Y = 96;
+// Keep tall and rotated animals below the stage status pill as well as inside
+// the canvas. The value is in the scene's fixed 390x620 coordinate space.
+const AIM_TOP_CLEARANCE = 52;
 const DANGER_Y = 151;
 const PLAYFIELD_MIN_X = 34;
 const PLAYFIELD_MAX_X = GAME_WIDTH - 34;
 const FALL_BOUNDARY_Y = GAME_HEIGHT + 75;
 const MOVE_SPEED = 150;
-const ROTATION_STEP = 1;
+const ROTATION_SPEED = 105;
+const ROTATION_START_STEP = 1.5;
+const ANIMAL_SWAP_LIMIT = 3;
 const AIM_GUIDE_COLORS: Readonly<Record<AnimalRole, number>> = {
   foundation: 0x5f843c,
   bridge: 0xd28a35,
@@ -53,6 +59,10 @@ interface TestSnapshot {
   readonly winner: 'human' | 'ai' | null;
   readonly bodyCount: number;
   readonly currentAnimal: AnimalId;
+  readonly swapsHuman: number;
+  readonly swapsAi: number;
+  readonly previewAngle: number | null;
+  readonly previewPosition: { readonly x: number; readonly y: number } | null;
   readonly bodies: readonly StackBodySnapshot[];
 }
 
@@ -61,6 +71,7 @@ declare global {
     __STACKIMALS_TEST__?: {
       snapshot(): TestSnapshot;
       restart(): void;
+      swap(): void;
       place(x: number, angle?: number): void;
       resolveAiImmediately(): void;
     };
@@ -103,8 +114,8 @@ function rotatedCollisionXBounds(
   const radians = Phaser.Math.DegToRad(angleDeg);
   const cosine = Math.cos(radians);
   const sine = Math.sin(radians);
-  const originX = definition.collision.textureOrigin.x * definition.display.width;
-  const originY = definition.collision.textureOrigin.y * definition.display.height;
+  const originX = definition.display.width / 2;
+  const originY = definition.display.height / 2;
   let minX = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
 
@@ -117,6 +128,47 @@ function rotatedCollisionXBounds(
   }
 
   return { minX, maxX };
+}
+
+function maximumVisibleRotationRadius(definition: AnimalDefinition): number {
+  const originX = definition.display.width / 2;
+  const originY = definition.display.height / 2;
+  const { minX, minY, maxX, maxY } = definition.collision.alphaBounds;
+  const corners = [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
+  ];
+  return Math.max(...corners.map((point) => Math.hypot(
+    point.x - originX,
+    point.y - originY,
+  )));
+}
+
+function previewAimY(definition: AnimalDefinition): number {
+  return Math.max(AIM_Y, AIM_TOP_CLEARANCE + maximumVisibleRotationRadius(definition));
+}
+
+function collisionOriginFromPreviewCenter(
+  definition: AnimalDefinition,
+  centerX: number,
+  centerY: number,
+  angleDeg: number,
+): { x: number; y: number } {
+  const physicsCollision = getPhysicsCollision(definition);
+  const radians = Phaser.Math.DegToRad(angleDeg);
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  const offsetX = physicsCollision.textureOrigin.x * definition.display.width
+    - definition.display.width / 2;
+  const offsetY = physicsCollision.textureOrigin.y * definition.display.height
+    - definition.display.height / 2;
+
+  return {
+    x: centerX + offsetX * cosine - offsetY * sine,
+    y: centerY + offsetX * sine + offsetY * cosine,
+  };
 }
 
 export class StackimalsScene extends Phaser.Scene {
@@ -136,12 +188,17 @@ export class StackimalsScene extends Phaser.Scene {
   private round = 1;
   private scorePlayer = 0;
   private scoreAi = 0;
+  private swapsPlayer = ANIMAL_SWAP_LIMIT;
+  private swapsAi = ANIMAL_SWAP_LIMIT;
   private winner: Actor | null = null;
   private resultReason: ResultReason | null = null;
   private placedAnimalNotice: AnimalId | null = null;
+  private swapNotice: { readonly actor: Actor; readonly animalId: AnimalId; readonly remaining: number } | null = null;
   private language: GameLanguage = 'zh';
   private moveLeft = false;
   private moveRight = false;
+  private rotateLeft = false;
+  private rotateRight = false;
   private dragPointerId: number | null = null;
   private currentDropId: string | null = null;
   private bodySerial = 0;
@@ -166,6 +223,8 @@ export class StackimalsScene extends Phaser.Scene {
 
   create(): void {
     this.resetMatchState();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onScaleResize, this);
+    this.fitCameraToStage(this.scale.gameSize.width, this.scale.gameSize.height);
     this.createStage();
     this.bindInput();
     this.matter.world.on('collisionstart', this.onCollisionStart, this);
@@ -175,16 +234,36 @@ export class StackimalsScene extends Phaser.Scene {
     this.exposeTestApi();
   }
 
+  private onScaleResize(gameSize: { width: number; height: number }): void {
+    this.fitCameraToStage(gameSize.width, gameSize.height);
+  }
+
+  private fitCameraToStage(viewportWidth: number, viewportHeight: number): void {
+    const fit = fitStageViewport(
+      { width: viewportWidth, height: viewportHeight },
+      { width: GAME_WIDTH, height: GAME_HEIGHT },
+    );
+    this.cameras.main
+      .setZoom(fit.zoom)
+      .centerOn(GAME_WIDTH / 2, GAME_HEIGHT / 2);
+  }
+
   update(_time: number, delta: number): void {
     if (this.paused || this.phase === 'game-over') {
       return;
     }
 
     if (this.phase === 'aiming' && this.actor === 'player' && this.preview !== null) {
-      const direction = Number(this.moveRight) - Number(this.moveLeft);
-      if (direction !== 0) {
+      const frameDelta = Math.min(delta, 34);
+      const moveDirection = Number(this.moveRight) - Number(this.moveLeft);
+      if (moveDirection !== 0) {
         const handling = getAnimalDefinition(this.currentAnimal).gameplay.moveSpeedMultiplier;
-        this.setPreviewX(this.preview.x + direction * MOVE_SPEED * handling * Math.min(delta, 34) / 1000);
+        this.setPreviewX(this.preview.x + moveDirection * MOVE_SPEED * handling * frameDelta / 1000);
+      }
+
+      const rotationDirection = Number(this.rotateRight) - Number(this.rotateLeft);
+      if (rotationDirection !== 0) {
+        this.rotatePreview(rotationDirection * ROTATION_SPEED * frameDelta / 1000);
       }
     }
 
@@ -232,12 +311,26 @@ export class StackimalsScene extends Phaser.Scene {
     }
 
     if (command.type === 'rotate') {
-      this.rotatePreview(command.direction);
+      const wasActive = command.direction === -1 ? this.rotateLeft : this.rotateRight;
+      if (command.direction === -1) {
+        this.rotateLeft = command.active;
+      } else {
+        this.rotateRight = command.active;
+      }
+      if (command.active && !wasActive) {
+        this.rotatePreview(command.direction * ROTATION_START_STEP);
+        this.audio.play('rotate');
+      }
       return;
     }
 
     if (command.type === 'drop') {
       this.dropCurrent();
+      return;
+    }
+
+    if (command.type === 'swap') {
+      this.swapCurrentAnimal('player');
     }
   }
 
@@ -257,11 +350,16 @@ export class StackimalsScene extends Phaser.Scene {
     this.round = 1;
     this.scorePlayer = 0;
     this.scoreAi = 0;
+    this.swapsPlayer = ANIMAL_SWAP_LIMIT;
+    this.swapsAi = ANIMAL_SWAP_LIMIT;
     this.winner = null;
     this.resultReason = null;
     this.placedAnimalNotice = null;
+    this.swapNotice = null;
     this.moveLeft = false;
     this.moveRight = false;
+    this.rotateLeft = false;
+    this.rotateRight = false;
     this.dragPointerId = null;
     this.currentDropId = null;
     this.bodySerial = 0;
@@ -278,8 +376,10 @@ export class StackimalsScene extends Phaser.Scene {
 
     this.aimGuide = this.add.graphics().setDepth(4);
 
-    this.add.image(PLATFORM_X, PLATFORM_Y + 5, 'platform')
-      .setDisplaySize(330, 106)
+    // The sprite is a direct side view. Its visible wooden face is aligned to
+    // the 24px Matter rectangle so animals read as resting on one flat edge.
+    this.add.image(PLATFORM_X, PLATFORM_Y + 2, 'platform')
+      .setDisplaySize(330, 138)
       .setDepth(7);
 
     this.matter.add.rectangle(
@@ -337,20 +437,59 @@ export class StackimalsScene extends Phaser.Scene {
     this.currentDropId = null;
     this.settledContact = false;
     this.stability.reset();
-    this.preview?.destroy();
-
-    const definition = getAnimalDefinition(this.currentAnimal);
-    this.preview = this.add.image(PLATFORM_X, AIM_Y, definition.assetKey)
-      .setScale(definition.displayScale)
-      .setOrigin(definition.collision.textureOrigin.x, definition.collision.textureOrigin.y)
-      .setDepth(9);
-    this.preview.setAlpha(actor === 'player' ? 1 : 0.88);
-    this.drawAimGuide();
+    this.swapNotice = null;
+    this.replacePreview(actor, PLATFORM_X);
     this.publish();
 
     if (actor === 'ai') {
       this.scheduleAi();
     }
+  }
+
+  private replacePreview(actor: Actor, targetX: number): void {
+    this.preview?.destroy();
+    const definition = getAnimalDefinition(this.currentAnimal);
+    this.preview = this.add.image(PLATFORM_X, previewAimY(definition), definition.assetKey)
+      .setScale(definition.displayScale)
+      .setOrigin(0.5, 0.5)
+      .setDepth(9);
+    this.preview.setAlpha(actor === 'player' ? 1 : 0.88);
+    this.setPreviewX(targetX);
+    this.drawAimGuide();
+  }
+
+  private swapCurrentAnimal(actor: Actor): boolean {
+    const isPlayersTurn = actor === 'player' && this.actor === 'player' && this.phase === 'aiming';
+    const isAiTurn = actor === 'ai' && this.actor === 'ai' && this.phase === 'thinking';
+    const remaining = actor === 'player' ? this.swapsPlayer : this.swapsAi;
+    if ((!isPlayersTurn && !isAiTurn) || remaining <= 0 || this.preview === null) {
+      return false;
+    }
+
+    const previousX = this.preview.x;
+    const queue = actor === 'player' ? this.playerQueue : this.aiQueue;
+    const replacement = queue.exchange(this.currentAnimal);
+    if (replacement === this.currentAnimal) {
+      return false;
+    }
+
+    this.currentAnimal = replacement;
+    if (actor === 'player') {
+      this.swapsPlayer -= 1;
+    } else {
+      this.swapsAi -= 1;
+    }
+    const swapsRemaining = actor === 'player' ? this.swapsPlayer : this.swapsAi;
+    this.swapNotice = { actor, animalId: replacement, remaining: swapsRemaining };
+    this.moveLeft = false;
+    this.moveRight = false;
+    this.rotateLeft = false;
+    this.rotateRight = false;
+    this.dragPointerId = null;
+    this.replacePreview(actor, previousX);
+    this.audio.play('move');
+    this.publish();
+    return true;
   }
 
   private scheduleAi(delay = 520): void {
@@ -360,17 +499,36 @@ export class StackimalsScene extends Phaser.Scene {
         return;
       }
 
-      const decision = this.ai.choosePlacement({
-        animalId: this.currentAnimal,
+      const placementContext = (animalId: AnimalId) => ({
+        animalId,
         bodies: this.records.map((record) => this.toSnapshot(record)),
         platform: { minX: PLATFORM_X - PLATFORM_WIDTH / 2, maxX: PLATFORM_X + PLATFORM_WIDTH / 2 },
         playfield: { minX: PLAYFIELD_MIN_X, maxX: PLAYFIELD_MAX_X },
       });
+      let decision = this.ai.choosePlacement(placementContext(this.currentAnimal));
+      if (this.swapsAi > 0) {
+        const alternativeAnimal = this.aiQueue.preview(1)[0];
+        if (alternativeAnimal !== undefined) {
+          const alternativeDecision = this.ai.choosePlacement(placementContext(alternativeAnimal));
+          if (shouldSwapAIAnimal(decision, alternativeDecision)) {
+            const didSwap = this.swapCurrentAnimal('ai');
+            decision = didSwap && this.currentAnimal === alternativeAnimal
+              ? alternativeDecision
+              : this.ai.choosePlacement(placementContext(this.currentAnimal));
+          }
+        }
+      }
+
+      if (turnGeneration !== this.generation || this.phase !== 'thinking' || this.preview === null) {
+        return;
+      }
 
       const target = this.preview;
+      const definition = getAnimalDefinition(this.currentAnimal);
       this.aiTween = this.tweens.add({
         targets: target,
         x: decision.x,
+        y: previewAimY(definition),
         angle: decision.angle,
         duration: 720,
         ease: 'Sine.easeInOut',
@@ -430,25 +588,13 @@ export class StackimalsScene extends Phaser.Scene {
     guide.strokeRoundedRect(footprintMinX, landingY - 4, footprintMaxX - footprintMinX, 8, 4);
   }
 
-  private rotatePreview(direction: -1 | 1): void {
+  private rotatePreview(deltaAngle: number): void {
     if (this.preview === null) {
       return;
     }
-    const allowed = getAnimalDefinition(this.currentAnimal).allowedAngles;
-    const current = normalizeAngle(this.preview.angle);
-    let nearest = 0;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-    allowed.forEach((angle, index) => {
-      const distance = Math.abs(normalizeAngle(angle - current));
-      if (distance < nearestDistance) {
-        nearest = index;
-        nearestDistance = distance;
-      }
-    });
-    const next = (nearest + direction * ROTATION_STEP + allowed.length) % allowed.length;
-    this.preview.setAngle(allowed[next] ?? 0);
+    const angle = normalizeAngle(this.preview.angle + deltaAngle);
+    this.preview.setAngle(angle);
     this.setPreviewX(this.preview.x);
-    this.audio.play('rotate');
   }
 
   private dropCurrent(): void {
@@ -457,14 +603,29 @@ export class StackimalsScene extends Phaser.Scene {
     }
 
     this.cancelAiWork();
-    const x = this.preview.x;
-    const y = this.preview.y;
+    this.moveLeft = false;
+    this.moveRight = false;
+    this.rotateLeft = false;
+    this.rotateRight = false;
+    const definition = getAnimalDefinition(this.currentAnimal);
     const angle = this.preview.angle;
+    const collisionOrigin = collisionOriginFromPreviewCenter(
+      definition,
+      this.preview.x,
+      this.preview.y,
+      angle,
+    );
     this.preview.destroy();
     this.preview = null;
     this.aimGuide?.clear();
     this.placedAnimalNotice = null;
-    const record = this.spawnPhysicsAnimal(this.currentAnimal, this.actor, x, y, angle);
+    const record = this.spawnPhysicsAnimal(
+      this.currentAnimal,
+      this.actor,
+      collisionOrigin.x,
+      collisionOrigin.y,
+      angle,
+    );
     this.records.push(record);
     this.currentDropId = record.id;
     this.phase = 'dropping';
@@ -491,7 +652,8 @@ export class StackimalsScene extends Phaser.Scene {
 
     const body = this.createOutlineBody(definition, x, y, angleDeg);
     image.setExistingBody(body, true);
-    image.setOrigin(definition.collision.textureOrigin.x, definition.collision.textureOrigin.y);
+    const physicsCollision = getPhysicsCollision(definition);
+    image.setOrigin(physicsCollision.textureOrigin.x, physicsCollision.textureOrigin.y);
     image.setPosition(x, y);
     image.setAngle(angleDeg);
     image.setFriction(definition.physics.friction, definition.physics.frictionAir, definition.physics.frictionStatic);
@@ -511,7 +673,7 @@ export class StackimalsScene extends Phaser.Scene {
     y: number,
     angleDeg: number,
   ): MatterJS.BodyType {
-    const outline = definition.collision.outline.map((point) => ({ x: point.x, y: point.y }));
+    const outline = getPhysicsCollision(definition).outline.map((point) => ({ x: point.x, y: point.y }));
     const body = this.matter.bodies.fromVertices(x, y, [outline], {
       friction: definition.physics.friction,
       frictionStatic: definition.physics.frictionStatic,
@@ -632,6 +794,8 @@ export class StackimalsScene extends Phaser.Scene {
     this.resultReason = reason;
     this.moveLeft = false;
     this.moveRight = false;
+    this.rotateLeft = false;
+    this.rotateRight = false;
     this.aimGuide?.clear();
     this.cancelAiWork();
     this.matter.world.pause();
@@ -646,6 +810,8 @@ export class StackimalsScene extends Phaser.Scene {
     this.paused = true;
     this.moveLeft = false;
     this.moveRight = false;
+    this.rotateLeft = false;
+    this.rotateRight = false;
     this.matter.world.pause();
     this.tweens.pauseAll();
     this.time.paused = true;
@@ -703,7 +869,13 @@ export class StackimalsScene extends Phaser.Scene {
           : `${reasonCopy}. Milo wins this round.`;
     } else {
       if (phase === 'humanAiming') {
-        message = `${animalCopy.trait} · ${animalCopy.tip}`;
+        if (this.swapNotice?.actor === 'player') {
+          message = this.language === 'zh'
+            ? `已换成${animalCopy.name} · 还可换 ${this.swapNotice.remaining} 次`
+            : `Swapped to ${animalCopy.name} · ${this.swapNotice.remaining} swaps left`;
+        } else {
+          message = `${animalCopy.trait} · ${animalCopy.tip}`;
+        }
       } else if (phase === 'humanSettling') {
         message = this.language === 'zh'
           ? `${animalCopy.name}正在寻找平衡…`
@@ -712,7 +884,11 @@ export class StackimalsScene extends Phaser.Scene {
         const aiCopy = this.language === 'zh'
           ? 'Milo 正在观察动物塔…'
           : 'Milo is studying the animal tower…';
-        if (this.placedAnimalNotice !== null) {
+        if (this.swapNotice?.actor === 'ai') {
+          message = this.language === 'zh'
+            ? `Milo 换成了${animalCopy.name} · 还可换 ${this.swapNotice.remaining} 次`
+            : `Milo swapped to ${animalCopy.name} · ${this.swapNotice.remaining} swaps left`;
+        } else if (this.placedAnimalNotice !== null) {
           const placed = getAnimalCopy(this.placedAnimalNotice, this.language);
           message = this.language === 'zh'
             ? `${placed.name}：${placed.settledCopy} · ${aiCopy}`
@@ -732,6 +908,8 @@ export class StackimalsScene extends Phaser.Scene {
       round: this.round,
       scoreHuman: this.scorePlayer,
       scoreAi: this.scoreAi,
+      swapsHuman: this.swapsPlayer,
+      swapsAi: this.swapsAi,
       message,
       currentAnimal: getAnimalPreview(this.currentAnimal, this.language),
       upcomingHuman: this.playerQueue.preview(3).map((id) => getAnimalPreview(id, this.language)),
@@ -752,13 +930,20 @@ export class StackimalsScene extends Phaser.Scene {
         winner: this.winner === null ? null : toUiActor(this.winner),
         bodyCount: this.records.length,
         currentAnimal: this.currentAnimal,
+        swapsHuman: this.swapsPlayer,
+        swapsAi: this.swapsAi,
+        previewAngle: this.preview?.angle ?? null,
+        previewPosition: this.preview === null
+          ? null
+          : { x: this.preview.x, y: this.preview.y },
         bodies: this.records.map((record) => this.toSnapshot(record)),
       }),
       restart: () => this.restartMatch(),
+      swap: () => this.swapCurrentAnimal(this.actor),
       place: (x, angle = 0) => {
         if (this.phase === 'aiming' && this.actor === 'player' && this.preview !== null) {
+          this.preview.setAngle(normalizeAngle(angle));
           this.setPreviewX(x);
-          this.preview.setAngle(angle);
           this.dropCurrent();
         }
       },
@@ -775,6 +960,7 @@ export class StackimalsScene extends Phaser.Scene {
 
   private handleShutdown(): void {
     this.cancelAiWork();
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.onScaleResize, this);
     this.matter?.world?.off('collisionstart', this.onCollisionStart, this);
     this.inputPlugin?.off('pointerdown', this.onPointerDown, this);
     this.inputPlugin?.off('pointermove', this.onPointerMove, this);

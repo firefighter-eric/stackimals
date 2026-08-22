@@ -5,7 +5,7 @@ import { copyFor } from './i18n';
 interface GameControlsProps {
   language: GameLanguage;
   enabled: boolean;
-  onRotate: (direction: -1 | 1) => void;
+  onRotate: (direction: -1 | 1, active: boolean) => void;
   onDrop: () => void;
 }
 
@@ -18,8 +18,26 @@ export function GameControls({ language, enabled, onRotate, onDrop }: GameContro
         className="control-button control-button--rotate"
         type="button"
         disabled={!enabled}
-        onClick={() => onRotate(-1)}
+        onPointerDown={(event) => {
+          if (event.pointerType === 'mouse' && event.button !== 0) {
+            return;
+          }
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          onRotate(-1, true);
+        }}
+        onPointerUp={(event) => {
+          onRotate(-1, false);
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        }}
+        onPointerCancel={() => onRotate(-1, false)}
+        onLostPointerCapture={() => onRotate(-1, false)}
+        onBlur={() => onRotate(-1, false)}
         aria-label={copy.rotateLeft}
+        aria-keyshortcuts="Q"
+        title={`Q · ${copy.rotateLeft}`}
       >
         <RotateLeftIcon />
       </button>
@@ -29,6 +47,8 @@ export function GameControls({ language, enabled, onRotate, onDrop }: GameContro
         type="button"
         disabled={!enabled}
         onClick={onDrop}
+        aria-keyshortcuts="Space"
+        title={`Space · ${copy.drop}`}
       >
         {copy.drop}
       </button>
@@ -37,8 +57,26 @@ export function GameControls({ language, enabled, onRotate, onDrop }: GameContro
         className="control-button control-button--rotate"
         type="button"
         disabled={!enabled}
-        onClick={() => onRotate(1)}
+        onPointerDown={(event) => {
+          if (event.pointerType === 'mouse' && event.button !== 0) {
+            return;
+          }
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          onRotate(1, true);
+        }}
+        onPointerUp={(event) => {
+          onRotate(1, false);
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        }}
+        onPointerCancel={() => onRotate(1, false)}
+        onLostPointerCapture={() => onRotate(1, false)}
+        onBlur={() => onRotate(1, false)}
         aria-label={copy.rotateRight}
+        aria-keyshortcuts="E"
+        title={`E · ${copy.rotateRight}`}
       >
         <RotateRightIcon />
       </button>
