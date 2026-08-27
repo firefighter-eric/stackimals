@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { GameBridge, GameCommand, GameSnapshot } from '../ui/gameBridge';
 import { renderScaleForDevicePixelRatio } from './core/renderResolution';
+import { WOOD_SOLVER_ITERATIONS } from './data/woodPhysics';
 import { StackimalsScene, STACKIMALS_GAME_SIZE } from './scenes/StackimalsScene';
 
 function configureHighDensityCanvasHost(container: HTMLElement): () => void {
@@ -92,12 +93,12 @@ class PhaserGameBridge implements GameBridge {
         matter: {
           gravity: { x: 0, y: 1.05 },
           enableSleeping: true,
-          // Stacking exposes even small solver penetration. A few extra
-          // iterations keep resting outlines visually separated without
-          // changing the game's fixed 60 Hz simulation cadence.
-          positionIterations: 10,
-          velocityIterations: 8,
-          constraintIterations: 4,
+          // A small contact cushion plus bounded position passes keep detailed
+          // compound outlines separated without making the stack buzz from
+          // repeated sub-pixel over-correction.
+          positionIterations: WOOD_SOLVER_ITERATIONS.position,
+          velocityIterations: WOOD_SOLVER_ITERATIONS.velocity,
+          constraintIterations: WOOD_SOLVER_ITERATIONS.constraint,
           runner: {
             fps: 60,
             maxUpdates: 3,

@@ -6,7 +6,12 @@ import { SeededRandom } from '../game/core/prng';
 import { StabilityDetector, isBodyAtRest } from '../game/core/stability';
 import { ANIMAL_IDS } from '../game/core/types';
 import { ANIMALS, getAnimalCopy } from '../game/data/animals';
-import { WOOD_PLATFORM_PHYSICS } from '../game/data/woodPhysics';
+import {
+  WOOD_CONTACT_SLOP,
+  WOOD_PLATFORM_PHYSICS,
+  WOOD_SLEEP_THRESHOLD,
+  WOOD_SOLVER_ITERATIONS,
+} from '../game/data/woodPhysics';
 
 describe('SeededRandom', () => {
   it('repeats the same sequence for the same string seed', () => {
@@ -138,6 +143,10 @@ describe('animal data', () => {
     expect(WOOD_PLATFORM_PHYSICS.friction).toBeLessThanOrEqual(0.9);
     expect(WOOD_PLATFORM_PHYSICS.frictionStatic).toBeGreaterThanOrEqual(1.25);
     expect(WOOD_PLATFORM_PHYSICS.restitution).toBeLessThanOrEqual(0.006);
+    expect(WOOD_CONTACT_SLOP).toBeGreaterThanOrEqual(0.1);
+    expect(WOOD_CONTACT_SLOP).toBeLessThanOrEqual(0.2);
+    expect(WOOD_SLEEP_THRESHOLD).toBeLessThanOrEqual(15);
+    expect(WOOD_SOLVER_ITERATIONS.position).toBeLessThanOrEqual(6);
   });
 });
 
