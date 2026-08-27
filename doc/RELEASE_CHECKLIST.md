@@ -24,7 +24,7 @@ pnpm build
 ```
 
 - [ ] TypeScript 无错误。
-- [ ] Vitest 全部通过；当前基线为 10 个测试文件、43 个测试。
+- [ ] Vitest 全部通过；当前基线为 11 个测试文件、44 个测试。
 - [ ] Vite Production build 成功，输出目录为 `dist/`。
 - [ ] 新增 warning 已解释；不能把 build warning 当作 build 成功的替代，也不能把既有大 chunk warning误报为编译失败。
 - [ ] `git diff --check` 无空白错误。

@@ -5,6 +5,7 @@ import { getPhysicsCollision, type AnimalDefinition } from '../../game/data/anim
 import {
   WOOD_CONTACT_SLOP,
   WOOD_SLEEP_THRESHOLD,
+  WOOD_SOLVER_ITERATIONS,
 } from '../../game/data/woodPhysics';
 
 export interface MatterPoint {
@@ -121,9 +122,9 @@ export function createMatterEngine(): TestMatterEngine {
   return Engine.create({
     enableSleeping: true,
     gravity: { x: 0, y: 1.05, scale: 0.001 },
-    positionIterations: 10,
-    velocityIterations: 8,
-    constraintIterations: 4,
+    positionIterations: WOOD_SOLVER_ITERATIONS.position,
+    velocityIterations: WOOD_SOLVER_ITERATIONS.velocity,
+    constraintIterations: WOOD_SOLVER_ITERATIONS.constraint,
   });
 }
 
