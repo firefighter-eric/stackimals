@@ -1,4 +1,5 @@
 import { ANIMAL_IDS, type AnimalId, type GameLanguage } from '../core/types';
+import { WOOD_ANIMAL_FRICTION } from './woodPhysics';
 import {
   createCollisionGeometry,
   createPhysicsCollisionShape,
@@ -313,7 +314,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-bear',
     texturePath: '/assets/game/animals/bear.webp',
     ...GEOMETRY.bear,
-    physics: { density: 0.00145, friction: 0.48, frictionStatic: 2.6, restitution: 0.0045, frictionAir: 0.04 },
+    physics: { density: 0.00145, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 2.6, restitution: 0.0045, frictionAir: 0.04 },
     gameplay: {
       role: 'foundation',
       tip: '身体宽厚，适合压住晃动的下层',
@@ -337,7 +338,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-bird',
     texturePath: '/assets/game/animals/bird.webp',
     ...GEOMETRY.bird,
-    physics: { density: 0.00105, friction: 0.38, frictionStatic: 3, restitution: 0.009, frictionAir: 0.045 },
+    physics: { density: 0.00105, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 3, restitution: 0.009, frictionAir: 0.045 },
     gameplay: {
       role: 'filler',
       tip: '身体最小，适合补上窄小缺口',
@@ -375,7 +376,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
         [86, 171],
       ],
     ),
-    physics: { density: 0.00115, friction: 0.44, frictionStatic: 2.8, restitution: 0.006, frictionAir: 0.045 },
+    physics: { density: 0.00115, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 2.8, restitution: 0.006, frictionAir: 0.045 },
     gameplay: {
       role: 'balancer',
       tip: '体型适中，适合衔接宽窄不同的层',
@@ -399,7 +400,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-crocodile',
     texturePath: '/assets/game/animals/crocodile.webp',
     ...GEOMETRY.crocodile,
-    physics: { density: 0.00132, friction: 0.52, frictionStatic: 2.6, restitution: 0.003, frictionAir: 0.04 },
+    physics: { density: 0.00132, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 2.6, restitution: 0.003, frictionAir: 0.04 },
     gameplay: {
       role: 'bridge',
       tip: '横放能跨越两个支点，竖放风险很高',
@@ -423,7 +424,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-elephant',
     texturePath: '/assets/game/animals/elephant.webp',
     ...GEOMETRY.elephant,
-    physics: { density: 0.00155, friction: 0.5, frictionStatic: 2.6, restitution: 0.003, frictionAir: 0.04 },
+    physics: { density: 0.00155, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 2.6, restitution: 0.003, frictionAir: 0.04 },
     gameplay: {
       role: 'foundation',
       tip: '重量最大，尽量靠近平台或塔的中心',
@@ -460,7 +461,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
         [128, 363], [153, 282], [91, 286], [42, 263], [10, 217],
       ],
     ),
-    physics: { density: 0.00118, friction: 0.44, frictionStatic: 2.8, restitution: 0.006, frictionAir: 0.045 },
+    physics: { density: 0.00118, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 2.8, restitution: 0.006, frictionAir: 0.045 },
     gameplay: {
       role: 'balancer',
       tip: '长尾能当支点，轻微倾斜更容易找平',
@@ -484,7 +485,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-frog',
     texturePath: '/assets/game/animals/frog.webp',
     ...GEOMETRY.frog,
-    physics: { density: 0.001, friction: 0.46, frictionStatic: 2.8, restitution: 0.0075, frictionAir: 0.045 },
+    physics: { density: 0.001, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 2.8, restitution: 0.0075, frictionAir: 0.045 },
     gameplay: {
       role: 'filler',
       tip: '贴进凹槽，可以填平不规则的表面',
@@ -508,7 +509,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-giraffe',
     texturePath: '/assets/game/animals/giraffe.webp',
     ...GEOMETRY.giraffe,
-    physics: { density: 0.0011, friction: 0.46, frictionStatic: 2.8, restitution: 0.0045, frictionAir: 0.05 },
+    physics: { density: 0.0011, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 2.8, restitution: 0.0045, frictionAir: 0.05 },
     gameplay: {
       role: 'challenge',
       tip: '竖放冲高度，横放更容易稳定',
@@ -532,7 +533,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-hedgehog',
     texturePath: '/assets/game/animals/hedgehog.webp',
     ...GEOMETRY.hedgehog,
-    physics: { density: 0.00125, friction: 0.52, frictionStatic: 2.6, restitution: 0.004, frictionAir: 0.045 },
+    physics: { density: 0.00125, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 2.6, restitution: 0.004, frictionAir: 0.045 },
     gameplay: {
       role: 'filler',
       tip: '尖背能卡住上层，也适合塞入浅凹槽',
@@ -556,7 +557,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-mouse',
     texturePath: '/assets/game/animals/mouse.webp',
     ...GEOMETRY.mouse,
-    physics: { density: 0.001, friction: 0.38, frictionStatic: 3, restitution: 0.0075, frictionAir: 0.05 },
+    physics: { density: 0.001, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 3, restitution: 0.0075, frictionAir: 0.05 },
     gameplay: {
       role: 'filler',
       tip: '身体很小，长尾能勾住边缘或补上窄缝',
@@ -580,7 +581,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-penguin',
     texturePath: '/assets/game/animals/penguin.webp',
     ...GEOMETRY.penguin,
-    physics: { density: 0.00118, friction: 0.32, frictionStatic: 3.4, restitution: 0.0075, frictionAir: 0.05 },
+    physics: { density: 0.00118, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 3.4, restitution: 0.0075, frictionAir: 0.05 },
     gameplay: {
       role: 'challenge',
       tip: '圆肚容易滚，优先寻找 V 形凹槽',
@@ -616,7 +617,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
         [70, 549], [48, 497], [68, 459], [131, 365],
       ],
     ),
-    physics: { density: 0.0011, friction: 0.3, frictionStatic: 3.6, restitution: 0.006, frictionAir: 0.06 },
+    physics: { density: 0.0011, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 3.6, restitution: 0.006, frictionAir: 0.06 },
     gameplay: {
       role: 'challenge',
       tip: '直立能快速增高，横放会更安全',
@@ -654,7 +655,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
         [176, 342], [181, 289], [118, 294], [59, 267], [17, 218],
       ],
     ),
-    physics: { density: 0.00122, friction: 0.44, frictionStatic: 2.8, restitution: 0.005, frictionAir: 0.05 },
+    physics: { density: 0.00122, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 2.8, restitution: 0.005, frictionAir: 0.05 },
     gameplay: {
       role: 'balancer',
       tip: '尾巴能配重，稍微倾斜可修正重心',
@@ -678,10 +679,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-tiger',
     texturePath: '/assets/game/animals/tiger.webp',
     ...GEOMETRY.tiger,
-    // The tiger's compound belly and curled tail need this small amount of
-    // separation response; lowering it further makes the solver eject the
-    // outline upward instead of producing a softer landing.
-    physics: { density: 0.00128, friction: 0.74, frictionStatic: 1.15, restitution: 0.006, frictionAir: 0.045 },
+    physics: { density: 0.00128, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 1.15, restitution: 0.006, frictionAir: 0.045 },
     gameplay: {
       role: 'balancer',
       tip: '身体宽长，卷起的虎尾能成为额外支点',
@@ -705,7 +703,7 @@ export const ANIMAL_CATALOG: Readonly<Record<AnimalId, AnimalDefinition>> = {
     assetKey: 'animal-turtle',
     texturePath: '/assets/game/animals/turtle.webp',
     ...GEOMETRY.turtle,
-    physics: { density: 0.00135, friction: 0.54, frictionStatic: 2.6, restitution: 0.003, frictionAir: 0.04 },
+    physics: { density: 0.00135, friction: WOOD_ANIMAL_FRICTION, frictionStatic: 2.6, restitution: 0.003, frictionAir: 0.04 },
     gameplay: {
       role: 'foundation',
       tip: '低矮又防滑，适合铺出下一层平台',

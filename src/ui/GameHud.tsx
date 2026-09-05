@@ -10,6 +10,7 @@ interface GameHudProps {
   status: string;
   onPause: () => void;
   onSwap: () => void;
+  inert: boolean;
 }
 
 interface AnimalQueueProps {
@@ -83,7 +84,7 @@ function TurnLight({ snapshot, language }: { snapshot: GameSnapshot; language: G
   );
 }
 
-export function GameHud({ snapshot, language, playerAnimal, opponentAnimal, status, onPause, onSwap }: GameHudProps) {
+export function GameHud({ snapshot, language, playerAnimal, opponentAnimal, status, onPause, onSwap, inert }: GameHudProps) {
   const copy = copyFor(language);
   const pauseDisabled =
     snapshot.phase === 'loading' ||
@@ -91,10 +92,11 @@ export function GameHud({ snapshot, language, playerAnimal, opponentAnimal, stat
     snapshot.phase === 'error';
 
   return (
-    <header className="game-hud">
+    <header className="game-hud" inert={inert}>
       <div className="scoreboard">
         <button
           className="icon-button pause-button"
+          id="pause-game"
           type="button"
           onClick={onPause}
           disabled={pauseDisabled}

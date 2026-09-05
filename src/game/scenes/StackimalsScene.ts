@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type {} from '../testApi';
 import { shouldSwapAIAnimal, StackingAI } from '../ai';
 import { SeededAnimalQueue, StabilityDetector, resolveFallOutcome } from '../core';
 import type { Actor, AnimalId, GameLanguage, MatchPhase, StackBodySnapshot } from '../core';
@@ -12,7 +13,7 @@ import {
   getPhysicsCollision,
 } from '../data';
 import type { AnimalDefinition, AnimalRole } from '../data/animals';
-import type { GameCommand, GamePhase, GameSnapshot } from '../../ui/gameBridge';
+import type { GameCommand, GamePauseReason, GamePhase, GameSnapshot } from '../../ui/gameBridge';
 import { getAnimalPreview } from '../../ui/gameBridge';
 import { GameAudio } from '../audio/GameAudio';
 import { fitStageViewport } from '../core/stageViewport';
@@ -35,6 +36,7 @@ const MOVE_SPEED = 150;
 const ROTATION_SPEED = 105;
 const ROTATION_START_STEP = 1.5;
 const ANIMAL_SWAP_LIMIT = 3;
+const ASSET_LOAD_TIMEOUT_MS = 15_000;
 const AIM_GUIDE_COLORS: Readonly<Record<AnimalRole, number>> = {
   foundation: 0x5f843c,
   bridge: 0xd28a35,
@@ -49,6 +51,7 @@ interface SceneHooks {
   publish(snapshot: GameSnapshot): void;
   ready(scene: StackimalsScene): void;
   stopped(scene: StackimalsScene): void;
+  failed(): void;
 }
 
 interface StackimalRecord {
@@ -59,34 +62,6 @@ interface StackimalRecord {
   readonly body: MatterJS.BodyType;
   readonly isCurrentDrop: boolean;
 }
-
-interface TestSnapshot {
-  readonly phase: GamePhase;
-  readonly turn: 'human' | 'ai';
-  readonly round: number;
-  readonly winner: 'human' | 'ai' | null;
-  readonly bodyCount: number;
-  readonly currentAnimal: AnimalId;
-  readonly swapsHuman: number;
-  readonly swapsAi: number;
-  readonly guideLinesEnabled: boolean;
-  readonly previewAngle: number | null;
-  readonly previewPosition: { readonly x: number; readonly y: number } | null;
-  readonly bodies: readonly StackBodySnapshot[];
-}
-
-declare global {
-  interface Window {
-    __STACKIMALS_TEST__?: {
-      snapshot(): TestSnapshot;
-      restart(): void;
-      swap(): void;
-      place(x: number, angle?: number): void;
-      resolveAiImmediately(): void;
-    };
-  }
-}
-
 function toUiActor(actor: Actor): 'human' | 'ai' {
   return actor === 'player' ? 'human' : 'ai';
 }
@@ -195,7 +170,9 @@ export class StackimalsScene extends Phaser.Scene {
   private currentAnimal: AnimalId = 'rabbit';
   private actor: Actor = 'player';
   private phase: MatchPhase = 'ready';
-  private paused = false;
+  private readonly pauseReasons = new Set<GamePauseReason>();
+  private lastDropActor: Actor | undefined;
+  private assetLoadFailed = false;
   private round = 1;
   private scorePlayer = 0;
   private scoreAi = 0;
@@ -225,24 +202,43 @@ export class StackimalsScene extends Phaser.Scene {
     this.hooks = hooks;
   }
 
+  private get paused(): boolean {
+    return this.pauseReasons.size > 0;
+  }
+
   preload(): void {
+    this.assetLoadFailed = false;
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.handleShutdown, this);
+    this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, this.onAssetLoadError, this);
     for (const animal of ANIMALS) {
-      this.load.image(animal.assetKey, animal.texturePath);
+      // Phaser's file defaults override the global loader timeout with zero.
+      this.load.image(animal.assetKey, animal.texturePath, { responseType: 'blob', timeout: ASSET_LOAD_TIMEOUT_MS });
     }
-    this.load.image('platform', '/assets/game/environment/platform.webp');
+    this.load.image('platform', '/assets/game/environment/platform.webp', { responseType: 'blob', timeout: ASSET_LOAD_TIMEOUT_MS });
   }
 
   create(): void {
+    this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, this.onAssetLoadError, this);
+    if (this.assetLoadFailed || !this.textures.exists('platform')
+      || ANIMALS.some((animal) => !this.textures.exists(animal.assetKey))) {
+      this.assetLoadFailed = true;
+      this.hooks.failed();
+      return;
+    }
     this.resetMatchState();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onScaleResize, this);
     this.fitCameraToStage(this.scale.gameSize.width, this.scale.gameSize.height);
     this.createStage();
     this.bindInput();
     this.matter.world.on('collisionstart', this.onCollisionStart, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
-    this.hooks.ready(this);
     this.beginTurn('player');
+    this.hooks.ready(this);
     this.exposeTestApi();
+  }
+
+  private onAssetLoadError(): void {
+    this.assetLoadFailed = true;
   }
 
   private onScaleResize(gameSize: { width: number; height: number }): void {
@@ -260,7 +256,11 @@ export class StackimalsScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    if (this.paused || this.phase === 'game-over') {
+    if (this.assetLoadFailed || this.paused || this.phase === 'game-over' || this.phase === 'ready') {
+      return;
+    }
+
+    if (this.resolveFalls()) {
       return;
     }
 
@@ -303,12 +303,12 @@ export class StackimalsScene extends Phaser.Scene {
     }
 
     if (command.type === 'pause') {
-      this.pauseMatch();
+      this.pauseMatch(command.reason);
       return;
     }
 
     if (command.type === 'resume') {
-      this.resumeMatch();
+      this.resumeMatch(command.reason);
       return;
     }
 
@@ -317,12 +317,14 @@ export class StackimalsScene extends Phaser.Scene {
     }
 
     if (command.type === 'move') {
+      const wasActive = command.direction === -1 ? this.moveLeft : this.moveRight;
       if (command.direction === -1) {
         this.moveLeft = command.active;
       } else {
         this.moveRight = command.active;
       }
-      if (command.active) {
+      if (command.active && !wasActive) {
+        this.setPreviewX((this.preview?.x ?? PLATFORM_X) + command.direction * 3);
         this.audio.play('move');
       }
       return;
@@ -365,7 +367,8 @@ export class StackimalsScene extends Phaser.Scene {
     this.aimGuide = null;
     this.actor = 'player';
     this.phase = 'ready';
-    this.paused = false;
+    this.pauseReasons.clear();
+    this.lastDropActor = undefined;
     this.round = 1;
     this.scorePlayer = 0;
     this.scoreAi = 0;
@@ -434,7 +437,8 @@ export class StackimalsScene extends Phaser.Scene {
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
-    if (this.dragPointerId === pointer.id && pointer.isDown && this.preview !== null) {
+    if (!this.paused && this.phase === 'aiming' && this.actor === 'player'
+      && this.dragPointerId === pointer.id && pointer.isDown && this.preview !== null) {
       this.setPreviewX(pointer.worldX);
     }
   }
@@ -653,6 +657,7 @@ export class StackimalsScene extends Phaser.Scene {
     );
     this.records.push(record);
     this.currentDropId = record.id;
+    this.lastDropActor = this.actor;
     this.phase = 'dropping';
     this.stability.reset();
     this.settledContact = false;
@@ -729,7 +734,7 @@ export class StackimalsScene extends Phaser.Scene {
     }
   }
 
-  private updateResolution(): void {
+  private resolveFalls(): boolean {
     const fallen = this.records.filter((record) => {
       const bounds = record.body.bounds;
       return bounds.min.y > FALL_BOUNDARY_Y
@@ -740,6 +745,7 @@ export class StackimalsScene extends Phaser.Scene {
     const outcome = resolveFallOutcome({
       phase: this.phase,
       actingActor: this.actor,
+      lastActingActor: this.lastDropActor,
       fallenBodies: fallen.map((record) => ({
         id: record.id,
         owner: record.actor,
@@ -748,11 +754,16 @@ export class StackimalsScene extends Phaser.Scene {
     });
     if (outcome !== null) {
       this.finishMatch(outcome.winner, 'fell');
-      return;
+      return true;
     }
+    return false;
+  }
 
+  private updateResolution(): void {
     const snapshots = this.records.map((record) => this.toSnapshot(record));
-    const stability = this.stability.sample(this.time.now, snapshots);
+    // Matter's clock advances only when physics steps. Phaser Clock.now keeps
+    // advancing during pause, so it cannot measure either settling window.
+    const stability = this.stability.sample(this.matter.world.engine.timing.timestamp, snapshots);
     if (!this.settledContact && stability.state !== 'timed-out') {
       return;
     }
@@ -836,26 +847,26 @@ export class StackimalsScene extends Phaser.Scene {
     this.publish();
   }
 
-  private pauseMatch(): void {
-    if (this.paused || this.phase === 'game-over' || this.phase === 'ready') {
+  private pauseMatch(reason: GamePauseReason = 'user'): void {
+    if (this.pauseReasons.has(reason) || this.phase === 'game-over' || this.phase === 'ready') {
       return;
     }
-    this.paused = true;
+    this.pauseReasons.add(reason);
     this.moveLeft = false;
     this.moveRight = false;
     this.rotateLeft = false;
     this.rotateRight = false;
+    this.dragPointerId = null;
     this.matter.world.pause();
     this.tweens.pauseAll();
     this.time.paused = true;
     this.publish();
   }
 
-  private resumeMatch(): void {
-    if (!this.paused) {
+  private resumeMatch(reason: GamePauseReason = 'user'): void {
+    if (!this.pauseReasons.delete(reason) || this.paused) {
       return;
     }
-    this.paused = false;
     this.time.paused = false;
     this.matter.world.resume();
     this.tweens.resumeAll();
@@ -987,12 +998,22 @@ export class StackimalsScene extends Phaser.Scene {
           this.scheduleAi(0);
         }
       },
+      forceFall: (bodyId) => {
+        const record = this.records.find((body) => body.id === bodyId);
+        if (record !== undefined) {
+          record.image.setAwake();
+          record.image.setPosition(record.body.position.x, FALL_BOUNDARY_Y + 300);
+        }
+      },
     };
     this.testApi = testApi;
     window.__STACKIMALS_TEST__ = testApi;
   }
 
   private handleShutdown(): void {
+    this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
+    this.events.off(Phaser.Scenes.Events.DESTROY, this.handleShutdown, this);
+    this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, this.onAssetLoadError, this);
     this.cancelAiWork();
     this.scale.off(Phaser.Scale.Events.RESIZE, this.onScaleResize, this);
     this.matter?.world?.off('collisionstart', this.onCollisionStart, this);
@@ -1006,6 +1027,7 @@ export class StackimalsScene extends Phaser.Scene {
     }
     this.testApi = null;
     this.hooks.stopped(this);
+    this.audio.destroy();
   }
 }
 

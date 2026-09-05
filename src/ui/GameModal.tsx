@@ -4,6 +4,7 @@ import { getAnimalCopy, getAnimalDefinition, type AnimalDefinition } from '../ga
 import type { GameActor, GameLanguage, GameSnapshot } from './gameBridge';
 import { copyFor } from './i18n';
 import { RestartIcon, SparkleIcon } from './icons';
+import { GameDialog } from './GameDialog';
 
 interface GameModalProps {
   snapshot: GameSnapshot;
@@ -106,7 +107,6 @@ export function GameModal({
   onPlayerAnimalChange,
 }: GameModalProps) {
   const copy = copyFor(language);
-  const animalRosterTitleRef = useRef<HTMLHeadingElement>(null);
   const animalRosterRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
@@ -115,7 +115,6 @@ export function GameModal({
     }
 
     animalRosterRef.current?.scrollTo({ top: 0 });
-    animalRosterTitleRef.current?.focus({ preventScroll: true });
   }, [animalRosterOpen]);
 
   const modalOpen =
@@ -131,222 +130,207 @@ export function GameModal({
 
   if (restartConfirmationOpen) {
     return (
-      <div className="modal-backdrop" role="presentation">
-        <section className="game-modal" role="alertdialog" aria-modal="true" aria-labelledby="restart-title">
-          <span className="game-modal__icon game-modal__icon--restart" aria-hidden="true">
-            <RestartIcon />
-          </span>
-          <p className="game-modal__eyebrow">{copy.restartEyebrow}</p>
-          <h2 id="restart-title">{copy.restartTitle}</h2>
-          <p>{copy.restartBody}</p>
-          <div className="game-modal__actions">
-            <button type="button" className="modal-button modal-button--secondary" onClick={onCancelRestart}>
-              {copy.back}
-            </button>
-            <button type="button" className="modal-button modal-button--danger" onClick={onConfirmRestart}>
-              {copy.restart}
-            </button>
-          </div>
-        </section>
-      </div>
+      <GameDialog key="restart" labelledBy="restart-title" role="alertdialog" returnFocusId="request-restart">
+        <span className="game-modal__icon game-modal__icon--restart" aria-hidden="true">
+          <RestartIcon />
+        </span>
+        <p className="game-modal__eyebrow">{copy.restartEyebrow}</p>
+        <h2 id="restart-title">{copy.restartTitle}</h2>
+        <p>{copy.restartBody}</p>
+        <div className="game-modal__actions">
+          <button type="button" className="modal-button modal-button--secondary" onClick={onCancelRestart}>
+            {copy.back}
+          </button>
+          <button type="button" className="modal-button modal-button--danger" onClick={onConfirmRestart}>
+            {copy.restart}
+          </button>
+        </div>
+      </GameDialog>
     );
   }
 
   if (animalRosterOpen) {
     return (
-      <div className="modal-backdrop modal-backdrop--roster" role="presentation">
-        <section
-          className="game-modal game-modal--roster"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="animal-roster-title"
-        >
-          <p className="game-modal__eyebrow">{copy.rosterEyebrow}</p>
-          <h2 id="animal-roster-title" ref={animalRosterTitleRef} tabIndex={-1}>{copy.chooseAnimalTitle}</h2>
-          <p>{copy.chooseAnimalBody(ANIMAL_ROSTER.length)}</p>
-          <ul ref={animalRosterRef} className="animal-roster" aria-label={copy.rosterLabel}>
-            {ANIMAL_ROSTER.map(({ animal, columns, rows }) => {
-              const animalCopy = getAnimalCopy(animal.id, language);
-              const selected = animal.id === playerAnimalId;
-              return (
-                <li
-                  className={`animal-roster__card${selected ? ' animal-roster__card--selected' : ''}`}
-                  data-roster-animal={animal.id}
-                  data-roster-tile={`${columns}x${rows}`}
-                  key={animal.id}
-                  style={rosterCardStyle(columns, rows)}
+      <GameDialog key="roster" labelledBy="animal-roster-title" className="game-modal game-modal--roster" backdropClassName="modal-backdrop modal-backdrop--roster" returnFocusId="open-animal-roster">
+        <p className="game-modal__eyebrow">{copy.rosterEyebrow}</p>
+        <h2 id="animal-roster-title" data-autofocus tabIndex={-1}>{copy.chooseAnimalTitle}</h2>
+        <p>{copy.chooseAnimalBody(ANIMAL_ROSTER.length)}</p>
+        <ul ref={animalRosterRef} className="animal-roster" aria-label={copy.rosterLabel}>
+          {ANIMAL_ROSTER.map(({ animal, columns, rows }) => {
+            const animalCopy = getAnimalCopy(animal.id, language);
+            const selected = animal.id === playerAnimalId;
+            return (
+              <li
+                className={`animal-roster__card${selected ? ' animal-roster__card--selected' : ''}`}
+                data-roster-animal={animal.id}
+                data-roster-tile={`${columns}x${rows}`}
+                key={animal.id}
+                style={rosterCardStyle(columns, rows)}
+              >
+                <button
+                  type="button"
+                  className="animal-roster__choice"
+                  aria-pressed={selected}
+                  aria-label={`${copy.chooseAnimal}: ${animalCopy.name}`}
+                  onClick={() => onPlayerAnimalChange(animal.id)}
                 >
-                  <button
-                    type="button"
-                    className="animal-roster__choice"
-                    aria-pressed={selected}
-                    aria-label={`${copy.chooseAnimal}: ${animalCopy.name}`}
-                    onClick={() => onPlayerAnimalChange(animal.id)}
-                  >
-                    <span className="animal-roster__figure">
-                      <img
-                        src={animal.texturePath}
-                        alt=""
-                        aria-hidden="true"
-                        draggable={false}
-                        style={rosterImageStyle(animal)}
-                      />
-                      {selected && <span className="animal-roster__selected">{copy.selected}</span>}
-                    </span>
-                    <span className="animal-roster__meta">
-                      <span className="animal-roster__copy">
-                        <span className="animal-roster__headline">
-                          <strong>{animalCopy.name}</strong>
-                          <small className="animal-roster__size">{animalCopy.sizeLabel}</small>
-                        </span>
-                        <em>{animalCopy.trait}</em>
+                  <span className="animal-roster__figure">
+                    <img
+                      src={animal.texturePath}
+                      alt=""
+                      aria-hidden="true"
+                      draggable={false}
+                      style={rosterImageStyle(animal)}
+                    />
+                    {selected && <span className="animal-roster__selected">{copy.selected}</span>}
+                  </span>
+                  <span className="animal-roster__meta">
+                    <span className="animal-roster__copy">
+                      <span className="animal-roster__headline">
+                        <strong>{animalCopy.name}</strong>
+                        <small className="animal-roster__size">{animalCopy.sizeLabel}</small>
                       </span>
+                      <em>{animalCopy.trait}</em>
                     </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <button
-            type="button"
-            className="modal-button modal-button--secondary animal-roster__back"
-            onClick={onCloseAnimalRoster}
-          >
-            {copy.backToSettings}
-          </button>
-        </section>
-      </div>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <button
+          type="button"
+          className="modal-button modal-button--secondary animal-roster__back"
+          onClick={onCloseAnimalRoster}
+        >
+          {copy.backToSettings}
+        </button>
+      </GameDialog>
     );
   }
 
   if (snapshot.phase === 'paused') {
     return (
-      <div className="modal-backdrop" role="presentation">
-        <section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="pause-title">
-          <div className="logo-plaque game-modal__brand" aria-label={copy.gameTitle}>
-            <span className="logo-leaf logo-leaf--left" aria-hidden="true">◆</span>
-            <span className="logo-plaque__title">{copy.gameTitle}</span>
-            <span className="logo-leaf logo-leaf--right" aria-hidden="true">◆</span>
-          </div>
-          <p className="game-modal__eyebrow">{copy.settingsEyebrow}</p>
-          <h2 id="pause-title">{copy.pausedTitle}</h2>
-          <p>{copy.pausedBody}</p>
-          <div className="language-setting">
-            <span id="language-setting-label">{copy.language}</span>
-            <div className="language-setting__options" role="group" aria-labelledby="language-setting-label">
-              <button
-                type="button"
-                className={language === 'zh' ? 'is-active' : ''}
-                aria-pressed={language === 'zh'}
-                onClick={() => onLanguageChange('zh')}
-              >
-                {copy.chinese}
-              </button>
-              <button
-                type="button"
-                className={language === 'en' ? 'is-active' : ''}
-                aria-pressed={language === 'en'}
-                onClick={() => onLanguageChange('en')}
-              >
-                {copy.english}
-              </button>
-            </div>
-          </div>
-          <div className="guide-setting">
-            <span className="guide-setting__copy">
-              <strong id="guide-setting-label">{copy.guideLines}</strong>
-              <small>{copy.guideLinesBody}</small>
-            </span>
+      <GameDialog key="pause" labelledBy="pause-title" returnFocusId="pause-game">
+        <div className="logo-plaque game-modal__brand" aria-label={copy.gameTitle}>
+          <span className="logo-leaf logo-leaf--left" aria-hidden="true">◆</span>
+          <span className="logo-plaque__title">{copy.gameTitle}</span>
+          <span className="logo-leaf logo-leaf--right" aria-hidden="true">◆</span>
+        </div>
+        <p className="game-modal__eyebrow">{copy.settingsEyebrow}</p>
+        <h2 id="pause-title">{copy.pausedTitle}</h2>
+        <p>{copy.pausedBody}</p>
+        <div className="language-setting">
+          <span id="language-setting-label">{copy.language}</span>
+          <div className="language-setting__options" role="group" aria-labelledby="language-setting-label">
             <button
               type="button"
-              className={`guide-setting__toggle${guideLinesEnabled ? ' is-active' : ''}`}
-              role="switch"
-              aria-checked={guideLinesEnabled}
-              aria-labelledby="guide-setting-label"
-              onClick={() => onGuideLinesChange(!guideLinesEnabled)}
+              className={language === 'zh' ? 'is-active' : ''}
+              aria-pressed={language === 'zh'}
+              onClick={() => onLanguageChange('zh')}
             >
-              <span>{guideLinesEnabled ? copy.guideLinesOn : copy.guideLinesOff}</span>
-              <i aria-hidden="true" />
+              {copy.chinese}
+            </button>
+            <button
+              type="button"
+              className={language === 'en' ? 'is-active' : ''}
+              aria-pressed={language === 'en'}
+              onClick={() => onLanguageChange('en')}
+            >
+              {copy.english}
             </button>
           </div>
-          <div className="identity-setting">
-            <span id="identity-setting-label">{copy.playerIdentity}</span>
-            <div className="identity-setting__match" aria-labelledby="identity-setting-label">
-              <span className="identity-setting__animal identity-setting__animal--human">
-                <img
-                  src={getAnimalDefinition(playerAnimalId).texturePath}
-                  alt=""
-                  aria-hidden="true"
-                  draggable={false}
-                />
-                <small>{copy.you}</small>
-                <strong>{getAnimalCopy(playerAnimalId, language).name}</strong>
-              </span>
-              <b aria-hidden="true">VS</b>
-              <span className="identity-setting__animal identity-setting__animal--ai">
-                <img
-                  src={getAnimalDefinition(opponentAnimalId).texturePath}
-                  alt=""
-                  aria-hidden="true"
-                  draggable={false}
-                />
-                <small>MILO</small>
-                <strong>{getAnimalCopy(opponentAnimalId, language).name}</strong>
-              </span>
-            </div>
+        </div>
+        <div className="guide-setting">
+          <span className="guide-setting__copy">
+            <strong id="guide-setting-label">{copy.guideLines}</strong>
+            <small>{copy.guideLinesBody}</small>
+          </span>
+          <button
+            type="button"
+            className={`guide-setting__toggle${guideLinesEnabled ? ' is-active' : ''}`}
+            role="switch"
+            aria-checked={guideLinesEnabled}
+            aria-labelledby="guide-setting-label"
+            onClick={() => onGuideLinesChange(!guideLinesEnabled)}
+          >
+            <span>{guideLinesEnabled ? copy.guideLinesOn : copy.guideLinesOff}</span>
+            <i aria-hidden="true" />
+          </button>
+        </div>
+        <div className="identity-setting">
+          <span id="identity-setting-label">{copy.playerIdentity}</span>
+          <div className="identity-setting__match" aria-labelledby="identity-setting-label">
+            <span className="identity-setting__animal identity-setting__animal--human">
+              <img
+                src={getAnimalDefinition(playerAnimalId).texturePath}
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+              />
+              <small>{copy.you}</small>
+              <strong>{getAnimalCopy(playerAnimalId, language).name}</strong>
+            </span>
+            <b aria-hidden="true">VS</b>
+            <span className="identity-setting__animal identity-setting__animal--ai">
+              <img
+                src={getAnimalDefinition(opponentAnimalId).texturePath}
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+              />
+              <small>MILO</small>
+              <strong>{getAnimalCopy(opponentAnimalId, language).name}</strong>
+            </span>
           </div>
-          <div className="game-modal__actions game-modal__actions--stacked">
-            <button type="button" className="modal-button modal-button--primary" onClick={onResume} autoFocus>
-              {copy.resume}
-            </button>
-            <button type="button" className="modal-button modal-button--roster" onClick={onOpenAnimalRoster}>
-              <span>{copy.chooseAnimal}</span>
-              <small>{copy.viewAnimalGuide(ANIMAL_ROSTER.length)}</small>
-            </button>
-            <button type="button" className="modal-button modal-button--secondary" onClick={onRequestRestart}>
-              {copy.restart}
-            </button>
-          </div>
-        </section>
-      </div>
+        </div>
+        <div className="game-modal__actions game-modal__actions--stacked">
+          <button type="button" className="modal-button modal-button--primary" onClick={onResume} data-autofocus>
+            {copy.resume}
+          </button>
+          <button type="button" className="modal-button modal-button--roster" id="open-animal-roster" onClick={onOpenAnimalRoster}>
+            <span>{copy.chooseAnimal}</span>
+            <small>{copy.viewAnimalGuide(ANIMAL_ROSTER.length)}</small>
+          </button>
+          <button type="button" className="modal-button modal-button--secondary" id="request-restart" onClick={onRequestRestart}>
+            {copy.restart}
+          </button>
+        </div>
+      </GameDialog>
     );
   }
 
   if (snapshot.phase === 'error') {
     return (
-      <div className="modal-backdrop" role="presentation">
-        <section className="game-modal" role="alertdialog" aria-modal="true" aria-labelledby="error-title">
-          <p className="game-modal__eyebrow">{copy.loadFailed}</p>
-          <h2 id="error-title">{copy.animalsLost}</h2>
-          <p>{snapshot.message || copy.retryBody}</p>
-          <button type="button" className="modal-button modal-button--primary" onClick={onConfirmRestart}>
-            {copy.retry}
-          </button>
-        </section>
-      </div>
+      <GameDialog key="error" labelledBy="error-title" role="alertdialog">
+        <p className="game-modal__eyebrow">{copy.loadFailed}</p>
+        <h2 id="error-title">{copy.animalsLost}</h2>
+        <p>{snapshot.error === 'assets' ? copy.assetLoadFailed : copy.retryBody}</p>
+        <button type="button" className="modal-button modal-button--primary" onClick={onConfirmRestart}>
+          {copy.retry}
+        </button>
+      </GameDialog>
     );
   }
 
   const winner = winnerCopy(snapshot.winner, language);
 
   return (
-    <div className="modal-backdrop modal-backdrop--celebration" role="presentation">
-      <section className="game-modal game-modal--result" role="dialog" aria-modal="true" aria-labelledby="result-title">
-        <span className="game-modal__icon" aria-hidden="true">
-          <SparkleIcon />
-        </span>
-        <p className="game-modal__eyebrow">{winner.eyebrow}</p>
-        <h2 id="result-title">{winner.title}</h2>
-        <p>{snapshot.message || winner.body}</p>
-        <div className="result-score" aria-label={copy.scoreLabel(snapshot.scoreHuman, snapshot.scoreAi)}>
-          <span><small>YOU</small><strong>{snapshot.scoreHuman}</strong></span>
-          <i>—</i>
-          <span><small>MILO</small><strong>{snapshot.scoreAi}</strong></span>
-        </div>
-        <button type="button" className="modal-button modal-button--primary" onClick={onConfirmRestart} autoFocus>
-          {copy.playAgain}
-        </button>
-      </section>
-    </div>
+    <GameDialog key="result" labelledBy="result-title" className="game-modal game-modal--result" backdropClassName="modal-backdrop modal-backdrop--celebration">
+      <span className="game-modal__icon" aria-hidden="true">
+        <SparkleIcon />
+      </span>
+      <p className="game-modal__eyebrow">{winner.eyebrow}</p>
+      <h2 id="result-title">{winner.title}</h2>
+      <p>{snapshot.message || winner.body}</p>
+      <div className="result-score" aria-label={copy.scoreLabel(snapshot.scoreHuman, snapshot.scoreAi)}>
+        <span><small>YOU</small><strong>{snapshot.scoreHuman}</strong></span>
+        <i>—</i>
+        <span><small>MILO</small><strong>{snapshot.scoreAi}</strong></span>
+      </div>
+      <button type="button" className="modal-button modal-button--primary" onClick={onConfirmRestart} data-autofocus>
+        {copy.playAgain}
+      </button>
+    </GameDialog>
   );
 }

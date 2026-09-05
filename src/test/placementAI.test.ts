@@ -8,7 +8,7 @@ import {
   type AIPlacementDecision,
 } from '../game/ai/placementAI';
 import { ANIMAL_IDS, type StackBodySnapshot } from '../game/core/types';
-import { getAnimalDefinition } from '../game/data/animals';
+import { getAnimalDefinition, getPhysicsCollision } from '../game/data/animals';
 
 const bodies: readonly StackBodySnapshot[] = [
   {
@@ -92,6 +92,30 @@ describe('chooseAIPlacement', () => {
 
       expect(animal.gameplay.preferredAngles).toContain(decision.angle);
       expect(decision.usedFallback).toBe(false);
+    }
+  });
+
+  it('keeps actual physics outlines inside the field even when support is at either edge', () => {
+    for (const animalId of ANIMAL_IDS) {
+      const animal = getAnimalDefinition(animalId);
+      for (const edge of [34, 356]) {
+        for (let seed = 0; seed < 8; seed++) {
+          const decision = chooseAIPlacement({
+            animalId,
+            bodies: [{ ...bodies[0]!, aabb: { minX: edge - 10, maxX: edge + 10, minY: 300, maxY: 350 } }],
+            platform: { minX: 48, maxX: 342 },
+            playfield: { minX: 34, maxX: 356 },
+          }, seed);
+          const radians = decision.angle * Math.PI / 180;
+          // Decisions are texture-center coordinates, including for asymmetric
+          // physics origins and the stable proxy outlines used at runtime.
+          const xs = getPhysicsCollision(animal).outline.map((point) => decision.x
+            + (point.x - animal.display.width / 2) * Math.cos(radians)
+            - (point.y - animal.display.height / 2) * Math.sin(radians));
+          expect(Math.min(...xs), `${animalId} / ${decision.angle} / left`).toBeGreaterThanOrEqual(34 - 1e-6);
+          expect(Math.max(...xs), `${animalId} / ${decision.angle} / right`).toBeLessThanOrEqual(356 + 1e-6);
+        }
+      }
     }
   });
 });

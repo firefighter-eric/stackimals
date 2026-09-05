@@ -1,11 +1,26 @@
 /** Shared Matter contact values for the side-view wooden platform. */
 export const WOOD_PLATFORM_PHYSICS = {
-  // Matter combines kinetic friction with Math.min. Ordinary animals provide
-  // the lower impact value; this platform ceiling preserves the tiger's tested
-  // compound-body exception without raising their collision impulse.
+  // Matter takes the lower kinetic friction of the two contacting bodies, so
+  // animals determine the impact response on both wood and other animals.
   friction: 0.9,
   frictionStatic: 1.25,
   restitution: 0.006,
+} as const;
+
+/**
+ * Large friction impulses on changing compound contact normals can turn a
+ * glancing hit into repeated upward kicks despite near-zero restitution.
+ * Share a low sliding coefficient; shape, density and static friction still
+ * distinguish the animals. Raising static friction to compensate reintroduces
+ * those kicks, so validate animal-on-animal impacts when changing either value.
+ */
+export const WOOD_ANIMAL_FRICTION = 0.11;
+
+/** Resolve angled contacts twice per 60 Hz frame, with bounded catch-up work. */
+export const WOOD_RUNNER = {
+  fps: 120,
+  maxUpdates: 6,
+  maxFrameTime: 50,
 } as const;
 
 /**

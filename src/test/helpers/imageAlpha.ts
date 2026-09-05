@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
+import sharp from 'sharp';
 
 export interface PixelBounds {
   readonly minX: number;
@@ -14,6 +15,13 @@ export interface AlphaImage {
   readonly width: number;
   readonly height: number;
   readonly alpha: Uint8Array;
+}
+
+/** Decode the actual delivered WebP, including padding and its alpha plane. */
+export async function decodeWebpAlpha(url: URL): Promise<AlphaImage> {
+  const { data, info } = await sharp(readFileSync(url)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const alpha = Uint8Array.from({ length: info.width * info.height }, (_, index) => data[index * info.channels + info.channels - 1]!);
+  return { width: info.width, height: info.height, alpha };
 }
 
 const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10] as const;

@@ -4,6 +4,7 @@ import { ANIMAL_CATALOG, getAnimalCopy } from '../game/data/animals';
 export type { AnimalId, GameLanguage };
 
 export type GameActor = 'human' | 'ai';
+export type GamePauseReason = 'user' | 'orientation';
 
 export type GamePhase =
   | 'loading'
@@ -38,6 +39,7 @@ export interface GameSnapshot {
   upcomingHuman: readonly AnimalPreview[];
   upcomingAi: readonly AnimalPreview[];
   winner: GameActor | null;
+  error?: 'startup' | 'assets';
 }
 
 export type GameCommand =
@@ -45,8 +47,8 @@ export type GameCommand =
   | { type: 'rotate'; direction: -1 | 1; active: boolean }
   | { type: 'drop' }
   | { type: 'swap' }
-  | { type: 'pause' }
-  | { type: 'resume' }
+  | { type: 'pause'; reason?: GamePauseReason }
+  | { type: 'resume'; reason?: GamePauseReason }
   | { type: 'restart' }
   | { type: 'setLanguage'; language: GameLanguage }
   | { type: 'setGuideLines'; enabled: boolean };

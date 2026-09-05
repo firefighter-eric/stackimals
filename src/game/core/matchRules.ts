@@ -12,6 +12,8 @@ export interface FallOutcomeInput {
   readonly phase: MatchPhase;
   /** The actor whose release initiated the current settle window. */
   readonly actingActor?: Actor;
+  /** Last actual release, retained after the next actor starts aiming. */
+  readonly lastActingActor?: Actor;
   readonly fallenBodies: readonly FallenBody[];
 }
 
@@ -29,7 +31,7 @@ export function resolveFallOutcome(input: FallOutcomeInput): MatchOutcome | null
   const isActiveResolution = input.phase === 'dropping' || input.phase === 'settling';
   const loser = isActiveResolution && input.actingActor !== undefined
     ? input.actingActor
-    : currentDrop?.owner ?? input.fallenBodies[0]?.owner;
+    : input.lastActingActor ?? currentDrop?.owner ?? input.fallenBodies[0]?.owner;
 
   if (loser === undefined) {
     return null;
@@ -37,7 +39,7 @@ export function resolveFallOutcome(input: FallOutcomeInput): MatchOutcome | null
 
   const reason: MatchOutcome['reason'] = currentDrop !== undefined
     ? 'active-drop-fell'
-    : isActiveResolution && input.actingActor !== undefined
+    : (isActiveResolution && input.actingActor !== undefined) || input.lastActingActor !== undefined
       ? 'chain-reaction'
       : 'unattributed-fall';
 

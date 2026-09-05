@@ -51,9 +51,9 @@ describe('animal collider regression', () => {
     }
   });
 
-  it('keeps the runtime collider close to the visible alpha silhouette', () => {
+  it('keeps the runtime collider close to the delivered WebP alpha silhouette', async () => {
     for (const animal of ANIMALS) {
-      const metrics = collectColliderAlphaMetrics(animal);
+      const metrics = await collectColliderAlphaMetrics(animal);
       const widthRatio = metrics.colliderBounds.width / metrics.opaqueBounds.width;
       const heightRatio = metrics.colliderBounds.height / metrics.opaqueBounds.height;
       const centerDeltaX = Math.abs(
