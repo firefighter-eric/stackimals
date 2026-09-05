@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { getPhysicsCollision, type AnimalDefinition } from '../../game/data/animals';
 import {
   WOOD_CONTACT_SLOP,
+  WOOD_RUNNER,
   WOOD_SLEEP_THRESHOLD,
   WOOD_SOLVER_ITERATIONS,
 } from '../../game/data/woodPhysics';
@@ -146,8 +147,14 @@ export function addToMatterWorld(
 }
 
 export function stepMatter(engine: TestMatterEngine, frames: number, delta = 1000 / 60): void {
+  // Test observation frames stay at 60 Hz, but simulate the same smaller steps
+  // as the browser runner. Durations and normalized Matter velocities therefore
+  // remain comparable with the original regressions.
+  const substeps = Math.max(1, Math.ceil(delta / (1000 / WOOD_RUNNER.fps)));
   for (let frame = 0; frame < frames; frame += 1) {
-    Engine.update(engine, delta);
+    for (let step = 0; step < substeps; step += 1) {
+      Engine.update(engine, delta / substeps);
+    }
   }
 }
 

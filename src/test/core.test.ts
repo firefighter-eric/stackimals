@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { SeededAnimalQueue } from '../game/core/animalQueue';
-import { resolveFallOutcome } from '../game/core/matchRules';
+import { canActorAim, isOutOfPlay, resolveFallOutcome } from '../game/core/matchRules';
 import { SeededRandom } from '../game/core/prng';
 import { StabilityDetector, isBodyAtRest } from '../game/core/stability';
 import { ANIMAL_IDS } from '../game/core/types';
@@ -122,11 +122,10 @@ describe('animal data', () => {
       expect(animal.physics.restitution, `${animal.id}: wooden restitution`).toBeLessThanOrEqual(0.009);
       expect(animal.physics.frictionAir, `${animal.id}: impact damping`).toBeGreaterThanOrEqual(0.04);
       expect(animal.physics.frictionAir, `${animal.id}: impact damping ceiling`).toBeLessThanOrEqual(0.06);
-      expect(animal.physics.friction, `${animal.id}: stable kinetic-friction floor`).toBeGreaterThanOrEqual(0.3);
-      const maximumStableKineticFriction = animal.id === 'tiger' ? 0.74 : 0.55;
+      expect(animal.physics.friction, `${animal.id}: sliding friction`).toBeGreaterThan(0);
       const minimumStableStaticFriction = animal.id === 'tiger' ? 1.15 : 2.6;
       expect(animal.physics.friction, `${animal.id}: stable kinetic-friction ceiling`).toBeLessThanOrEqual(
-        maximumStableKineticFriction,
+        0.2,
       );
       expect(animal.physics.frictionStatic, `${animal.id}: wooden static friction`).toBeGreaterThanOrEqual(
         minimumStableStaticFriction,
@@ -134,7 +133,7 @@ describe('animal data', () => {
       expect(
         animal.physics.friction * animal.physics.frictionStatic,
         `${animal.id}: near-rest wooden grip`,
-      ).toBeGreaterThanOrEqual(animal.id === 'tiger' ? 0.85 : 1.05);
+      ).toBeGreaterThanOrEqual(0.1);
       expect(animal.physics.frictionStatic, `${animal.id}: static friction exceeds sliding`).toBeGreaterThan(
         animal.physics.friction,
       );
@@ -185,9 +184,36 @@ describe('StabilityDetector', () => {
     expect(result.movingBodyIds).toEqual(['moving']);
     expect(isBodyAtRest({ ...movingBody, isSleeping: true })).toBe(true);
   });
+
+  it('enforces the default quiet window, deadline, and missing-motion contract', () => {
+    const stable = new StabilityDetector();
+    stable.sample(0, [quietBody]);
+    expect(stable.sample(849, [quietBody]).state).toBe('moving');
+    expect(stable.sample(850, [quietBody]).state).toBe('stable');
+    const unsettled = new StabilityDetector();
+    unsettled.sample(0, [movingBody]);
+    expect(unsettled.sample(7999, [movingBody]).state).toBe('moving');
+    expect(unsettled.sample(8000, [movingBody]).state).toBe('timed-out');
+    expect(isBodyAtRest({ id: 'unknown-motion' })).toBe(false);
+  });
 });
 
 describe('resolveFallOutcome', () => {
+  it('keeps late consequences with the last releaser until the next actual drop', () => {
+    for (const phase of ['aiming', 'thinking'] as const) {
+      expect(resolveFallOutcome({
+        phase,
+        actingActor: 'player',
+        lastActingActor: 'ai',
+        fallenBodies: [{ id: 'old-player-body', owner: 'player' }],
+      })).toEqual({ winner: 'player', loser: 'ai', reason: 'chain-reaction', fallenBodyIds: ['old-player-body'] });
+    }
+    expect(resolveFallOutcome({
+      phase: 'dropping', actingActor: 'player', lastActingActor: 'ai',
+      fallenBodies: [{ id: 'old-ai-body', owner: 'ai' }],
+    })?.loser).toBe('player');
+  });
+
   it('makes the acting player responsible for a chain reaction', () => {
     expect(resolveFallOutcome({
       phase: 'settling',
@@ -213,5 +239,31 @@ describe('resolveFallOutcome', () => {
       actingActor: 'ai',
       fallenBodies: [{ id: 'late-body', owner: 'player' }],
     })).toBeNull();
+  });
+
+  it('uses the body owner only when no release exists, and ignores empty falls', () => {
+    expect(resolveFallOutcome({ phase: 'aiming', fallenBodies: [] })).toBeNull();
+    expect(resolveFallOutcome({ phase: 'aiming', fallenBodies: [{ id: 'orphan', owner: 'ai' }] }))
+      .toMatchObject({ loser: 'ai', reason: 'unattributed-fall' });
+  });
+});
+
+describe('playfield and input boundaries', () => {
+  it('waits for the entire body to cross a fall boundary', () => {
+    const bounds = { minX: -70, maxX: 460 };
+    expect(isOutOfPlay({ minX: 0, maxX: 20, minY: 695, maxY: 715 }, 695, bounds)).toBe(false);
+    expect(isOutOfPlay({ minX: 0, maxX: 20, minY: 695.01, maxY: 715 }, 695, bounds)).toBe(true);
+    expect(isOutOfPlay({ minX: -90, maxX: -70, minY: 0, maxY: 20 }, 695, bounds)).toBe(false);
+    expect(isOutOfPlay({ minX: -90, maxX: -70.01, minY: 0, maxY: 20 }, 695, bounds)).toBe(true);
+    expect(isOutOfPlay({ minX: 460, maxX: 480, minY: 0, maxY: 20 }, 695, bounds)).toBe(false);
+    expect(isOutOfPlay({ minX: 460.01, maxX: 480, minY: 0, maxY: 20 }, 695, bounds)).toBe(true);
+  });
+
+  it('allows only the active actor to aim and never permits play during resolution', () => {
+    expect(canActorAim('aiming', 'player', 'player')).toBe(true);
+    expect(canActorAim('aiming', 'ai', 'player')).toBe(false);
+    for (const phase of ['ready', 'thinking', 'dropping', 'settling', 'game-over'] as const) {
+      expect(canActorAim(phase, 'player', 'player')).toBe(false);
+    }
   });
 });

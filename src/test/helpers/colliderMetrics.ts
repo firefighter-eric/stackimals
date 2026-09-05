@@ -2,6 +2,7 @@ import { getPhysicsCollision, type AnimalDefinition } from '../../game/data/anim
 import { childParts, createAnimalMatterBody, type MatterPoint } from './phaserMatter';
 import {
   decodeRgbaPngAlpha,
+  decodeWebpAlpha,
   findAlphaBounds,
   readWebpSize,
   type PixelBounds,
@@ -108,16 +109,18 @@ function toLogicalBounds(
   };
 }
 
-export function collectColliderAlphaMetrics(definition: AnimalDefinition): ColliderAlphaMetrics {
+export async function collectColliderAlphaMetrics(definition: AnimalDefinition): Promise<ColliderAlphaMetrics> {
   const physicsCollision = getPhysicsCollision(definition);
   const sourceUrl = new URL(`../../../assets-src/generated-v1/${definition.id}.png`, import.meta.url);
   const webpUrl = new URL(`../../../public${definition.texturePath}`, import.meta.url);
-  const source = decodeRgbaPngAlpha(sourceUrl);
-  const sourceTrim = findAlphaBounds(source, 1);
+  const original = decodeRgbaPngAlpha(sourceUrl);
+  const originalTrim = findAlphaBounds(original, 1);
+  const source = await decodeWebpAlpha(webpUrl);
+  const sourceTrim = { minX: 0, minY: 0, maxX: source.width - 1, maxY: source.height - 1, width: source.width, height: source.height };
   const alphaThreshold = definition.collision.fit.alphaThreshold;
   const meaningfulAlpha = findAlphaBounds(source, alphaThreshold);
   const webpSize = readWebpSize(webpUrl);
-  const sourceTrimAspect = sourceTrim.width / sourceTrim.height;
+  const sourceTrimAspect = originalTrim.width / originalTrim.height;
   const webpAspect = webpSize.width / webpSize.height;
 
   const body = createAnimalMatterBody(definition);

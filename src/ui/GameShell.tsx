@@ -4,6 +4,8 @@ import { createInitialGameSnapshot, getAnimalPreview } from './gameBridge';
 import { GameControls } from './GameControls';
 import { GameHud } from './GameHud';
 import { GameModal } from './GameModal';
+import { GameDialog } from './GameDialog';
+import { useOrientationBlock } from './useOrientationBlock';
 import { readStoredGuideLines, storeGuideLines } from './gamePreferences';
 import { copyFor, readStoredLanguage, storeLanguage } from './i18n';
 import {
@@ -19,7 +21,7 @@ interface GameShellProps {
 
 function isTextEntryTarget(target: EventTarget | null) {
   return target instanceof HTMLElement &&
-    Boolean(target.closest('input, select, textarea, [contenteditable="true"]'));
+    (target.isContentEditable || Boolean(target.closest('input, select, textarea')));
 }
 
 function isPlayablePhase(phase: GameSnapshot['phase']) {
@@ -27,6 +29,9 @@ function isPlayablePhase(phase: GameSnapshot['phase']) {
 }
 
 function statusCopy(snapshot: GameSnapshot, language: GameLanguage) {
+  if (snapshot.phase === 'error') {
+    return snapshot.error === 'assets' ? copyFor(language).assetLoadFailed : copyFor(language).retryBody;
+  }
   if (snapshot.message) {
     return snapshot.message;
   }
@@ -47,8 +52,6 @@ function statusCopy(snapshot: GameSnapshot, language: GameLanguage) {
       return copy.pausedStatus;
     case 'gameOver':
       return snapshot.winner === 'human' ? copy.humanWinStatus : copy.aiWinStatus;
-    case 'error':
-      return copy.errorStatus;
   }
 }
 
@@ -59,15 +62,17 @@ export function GameShell({ bridge }: GameShellProps) {
   const [playerAnimalId, setPlayerAnimalId] = useState<AnimalId>(() => readStoredPlayerAnimal());
   const initialSnapshotRef = useRef<GameSnapshot>(createInitialGameSnapshot(language));
   const snapshotRef = useRef<GameSnapshot>(initialSnapshotRef.current);
-  const languageRef = useRef(language);
   const restartConfirmationRef = useRef(false);
   const animalRosterRef = useRef(false);
   const [snapshot, setSnapshot] = useState<GameSnapshot>(initialSnapshotRef.current);
   const [restartConfirmationOpen, setRestartConfirmationOpen] = useState(false);
   const [animalRosterOpen, setAnimalRosterOpen] = useState(false);
+  const [engineGeneration, setEngineGeneration] = useState(0);
+  const orientationBlocked = useOrientationBlock();
+  const orientationRef = useRef(orientationBlocked);
+  orientationRef.current = orientationBlocked;
 
   snapshotRef.current = snapshot;
-  languageRef.current = language;
   restartConfirmationRef.current = restartConfirmationOpen;
   animalRosterRef.current = animalRosterOpen;
 
@@ -79,16 +84,15 @@ export function GameShell({ bridge }: GameShellProps) {
 
     try {
       return bridge.mount(mountNode, setSnapshot);
-    } catch (error) {
-      const copy = copyFor(languageRef.current);
-      const message = error instanceof Error ? error.message : copy.unknownError;
+    } catch {
       setSnapshot((current) => ({
         ...current,
         phase: 'error',
-        message: copy.startupFailed(message),
+        error: 'startup',
+        message: '',
       }));
     }
-  }, [bridge]);
+  }, [bridge, engineGeneration]);
 
   useEffect(() => {
     const copy = copyFor(language);
@@ -103,7 +107,7 @@ export function GameShell({ bridge }: GameShellProps) {
       upcomingAi: current.upcomingAi.map((animal) => getAnimalPreview(animal.id, language)),
     }));
     bridge.dispatch({ type: 'setLanguage', language });
-  }, [bridge, language]);
+  }, [bridge, language, engineGeneration]);
 
   useEffect(() => {
     storePlayerAnimal(playerAnimalId);
@@ -112,7 +116,11 @@ export function GameShell({ bridge }: GameShellProps) {
   useEffect(() => {
     storeGuideLines(guideLinesEnabled);
     bridge.dispatch({ type: 'setGuideLines', enabled: guideLinesEnabled });
-  }, [bridge, guideLinesEnabled]);
+  }, [bridge, guideLinesEnabled, engineGeneration]);
+
+  useEffect(() => {
+    bridge.dispatch({ type: orientationBlocked ? 'pause' : 'resume', reason: 'orientation' });
+  }, [bridge, orientationBlocked, engineGeneration]);
 
   useEffect(() => {
     const activeMoves = new Set<-1 | 1>();
@@ -131,15 +139,13 @@ export function GameShell({ bridge }: GameShellProps) {
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code === 'Escape' && animalRosterRef.current) {
+      if (event.defaultPrevented || orientationRef.current) return;
+      if (isTextEntryTarget(event.target)) return;
+      if ((event.code === 'Escape' || event.code === 'KeyP') && animalRosterRef.current) {
         event.preventDefault();
         if (!event.repeat) {
           setAnimalRosterOpen(false);
         }
-        return;
-      }
-
-      if (isTextEntryTarget(event.target)) {
         return;
       }
 
@@ -200,7 +206,12 @@ export function GameShell({ bridge }: GameShellProps) {
         return;
       }
 
-      if ((event.code === 'Space' || event.code === 'Enter') && !event.repeat) {
+      const isActivation = event.code === 'Space' || event.code === 'Enter';
+      if (isActivation && event.target instanceof HTMLElement
+        && event.target.closest('button, a[href], [role="button"], [role="switch"], summary')) {
+        return;
+      }
+      if (isActivation && !event.repeat) {
         event.preventDefault();
         dispatch({ type: 'drop' });
         return;
@@ -250,7 +261,9 @@ export function GameShell({ bridge }: GameShellProps) {
     };
   }, [bridge]);
 
-  const canControl = isPlayablePhase(snapshot.phase) && !restartConfirmationOpen && !animalRosterOpen;
+  const canControl = isPlayablePhase(snapshot.phase) && !restartConfirmationOpen && !animalRosterOpen && !orientationBlocked;
+  const modalOpen = orientationBlocked || restartConfirmationOpen || animalRosterOpen
+    || snapshot.phase === 'paused' || snapshot.phase === 'gameOver' || snapshot.phase === 'error';
   const requestRestart = () => setRestartConfirmationOpen(true);
   const resumeGame = () => {
     setAnimalRosterOpen(false);
@@ -259,7 +272,12 @@ export function GameShell({ bridge }: GameShellProps) {
   const confirmRestart = () => {
     setRestartConfirmationOpen(false);
     setAnimalRosterOpen(false);
-    bridge.dispatch({ type: 'restart' });
+    if (snapshot.phase === 'error') {
+      setSnapshot(createInitialGameSnapshot(language));
+      setEngineGeneration((generation) => generation + 1);
+    } else {
+      bridge.dispatch({ type: 'restart' });
+    }
   };
   const copy = copyFor(language);
   const playerAnimal = getAnimalPreview(playerAnimalId, language);
@@ -276,14 +294,17 @@ export function GameShell({ bridge }: GameShellProps) {
           status={statusCopy(snapshot, language)}
           onPause={() => bridge.dispatch({ type: 'pause' })}
           onSwap={() => bridge.dispatch({ type: 'swap' })}
+          inert={modalOpen}
         />
 
-        <div className="game-stage" data-game-phase={snapshot.phase}>
+        <div className="game-stage" data-game-phase={snapshot.phase} inert={modalOpen}>
           <div
             ref={mountRef}
             className="game-stage__mount"
             id="stackimals-game"
             aria-label={copy.stageLabel}
+            role="group"
+            tabIndex={0}
           />
 
           <TablePlayers
@@ -304,11 +325,13 @@ export function GameShell({ bridge }: GameShellProps) {
         <GameControls
           language={language}
           enabled={canControl}
+          inert={modalOpen}
+          onMove={(direction, active) => bridge.dispatch({ type: 'move', direction, active })}
           onRotate={(direction, active) => bridge.dispatch({ type: 'rotate', direction, active })}
           onDrop={() => bridge.dispatch({ type: 'drop' })}
         />
 
-        <GameModal
+        {!orientationBlocked && <GameModal
           snapshot={snapshot}
           restartConfirmationOpen={restartConfirmationOpen}
           animalRosterOpen={animalRosterOpen}
@@ -325,13 +348,13 @@ export function GameShell({ bridge }: GameShellProps) {
           onLanguageChange={setLanguage}
           onGuideLinesChange={setGuideLinesEnabled}
           onPlayerAnimalChange={setPlayerAnimalId}
-        />
+        />}
 
-        <div className="rotate-device" role="status">
+        {orientationBlocked && <GameDialog labelledBy="orientation-title" backdropClassName="rotate-device" className="rotate-device__panel">
           <span aria-hidden="true">↻</span>
-          <strong>{copy.portraitTitle}</strong>
+          <strong id="orientation-title">{copy.portraitTitle}</strong>
           <small>{copy.portraitBody}</small>
-        </div>
+        </GameDialog>}
       </section>
     </main>
   );

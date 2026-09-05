@@ -48,12 +48,12 @@ ready → player aiming → dropping/settling
       → player aiming → … → game-over
 ```
 
-核心阶段经 Scene 映射为 `humanAiming`、`humanSettling`、`aiThinking`、`aiSettling` 和 `gameOver`。`paused` 来自独立 boolean 覆盖态；`loading` 来自 React 初始快照；`error` 来自 React 捕获同步 mount 异常，它们都不是核心 `MatchPhase`。
+核心阶段经 Scene 映射为 `humanAiming`、`humanSettling`、`aiThinking`、`aiSettling` 和 `gameOver`。`paused` 来自独立暂停原因集合（手动、横屏）；`loading` 来自 React 初始快照；`error` 来自同步 mount 异常或资源加载失败。它们都不是核心 `MatchPhase`。
 
 必须保持以下约束：
 
 1. 同一时间只能有一个当前投放者和一只当前预览动物。
-2. `paused` 是覆盖状态；继续后必须恢复暂停前的核心阶段。
+2. `paused` 是覆盖状态；所有暂停原因解除后才恢复原核心阶段。回到竖屏不能解除已有的手动暂停。
 3. `game-over` 是终态；除重开外的输入全部忽略。
 4. 重开必须递增局 generation，取消旧 AI timer/Tween，并重新创建两条队列和 AI 随机源。
 5. 玩家窗口失焦时，必须释放持续按下的左右移动与旋转命令。
@@ -69,18 +69,22 @@ ready → player aiming → dropping/settling
 - 缺失速度数据不能被当作稳定证据。
 - 正常换手还要求当前投放至少触发过一次 `collisionstart`；只有低速但从未接触，不能直接算成功稳定。
 
-稳定窗口必须是连续的；期间任何 body 再次移动，都要重新累计。
+稳定窗口必须是连续的；期间任何 body 再次移动，都要重新累计。时间取 Matter 的模拟时间戳，暂停不消耗 `850ms` 安静窗口或 `8000ms` 期限；不能改回暂停时仍更新的 Phaser `Clock.now`。
+
+出界在所有活动阶段检查。Scene 记录最近一次实际释放动物的一方，在下一次释放前，旧动物的延迟掉落仍由其负责；换手和瞄准不会转移责任。
+
+资源加载监听 `FILE_LOAD_ERROR` 并在创建场景前核对所有必需纹理；文件级 XHR 超时和整个启动期限均为 15 秒，不自动重试。失败后销毁旧实例并显示错误；重试重新 mount，同时重新应用语言和辅助线偏好。不能只设置 Phaser 的全局 loader timeout，它会被文件默认值覆盖。
 
 ## 4. Matter 物理边界
 
 当前世界配置：
 
 - 重力：`x = 0`、`y = 1.05`。
-- runner：目标 `60fps`，单渲染帧最多补 `3` 次更新，最大帧时间 `50ms`。
+- runner：固定 `120Hz`（每步约 `8.33ms`），单渲染帧最多补 `6` 次更新，最大帧时间 `50ms`；普通 `60Hz` 画面每帧进行两次物理更新。
 - solver：position `6`、velocity `8`、constraint `4` 次迭代。position 不再额外加硬到 `10`，避免复杂 compound body 在多个接触点之间反复做亚像素过度修正。
 - animal body：启用 sleeping，sleep threshold `15`（约四分之一秒持续低运动后休眠），碰撞 `slop = 0.12`（仍小于一个逻辑像素，用不可见的接触余量吸收求解器微修正）。猫、狐狸、兔子和浣熊使用贴合原图外缘的稳定代理轮廓，去掉会反复切换接触点的腿部窄缝。
-- 平台：friction `0.9`、frictionStatic `1.25`、restitution `0.006`；接触时动态摩擦取两物体较小值，所以普通动物仍由自身的低动态摩擦控制落地冲量，平台值仅为老虎等专属组合提供下限。
-- 每只动物另有独立 density、friction、frictionStatic、restitution 和 frictionAir。Matter 对复杂 body 的高动态摩擦可能不稳定，因此通常把碰撞阶段的 friction 控制在 `0.3–0.54`，近静止阶段使用 `2.6–3.6` 的 frictionStatic 乘数；老虎因复合轮廓求解稳定性使用单独组合。恢复系数范围为 `0.003–0.009`。这使动物落地时不会被过强切向冲量反复推开，但稳定后仍有足够木制咬合力；兔子与企鹅仍比乌龟、鳄鱼和刺猬更容易受不平衡力带动。
+- 平台：friction `0.9`、frictionStatic `1.25`、restitution `0.006`；接触时动态摩擦取两物体较小值，平台接触和动物互撞都使用动物侧的低动态摩擦。
+- 动物共享 friction `0.11`，另有独立 density、frictionStatic、restitution 和 frictionAir。旧的 `0.3–0.74` 动态摩擦配合较大的步长，会在斜向复合轮廓接触时产生反复向上的冲量。低动态摩擦和更小的固定步长共同限制这种抖动；不要按比例提高静摩擦来补偿，否则可能重新放大碰撞冲量。静摩擦乘数仍为普通动物 `2.6–3.6`、老虎 `1.15`，恢复系数仍为 `0.003–0.009`。动物差异由轮廓、重心、密度和其余材质参数共同决定。
 
 修改这些参数会同时影响手感、AI 成功率、稳定时间和穿透深度。不能只凭单个截图调参；至少要运行几何/物理回归并手测低帧率、暂停恢复和高塔场景。
 
@@ -125,7 +129,7 @@ Matter 是离散刚体求解器，运行中可能出现极短、极浅的数值�
 
 1. 保存有来源记录的透明源图，并生成优化后的 WebP。
 2. 更新 `sourceSize`，按约定面积计算等比 `display`。
-3. 重新提取并人工检查 alpha outline、alpha bounds、fit 指标和 texture origin。
+3. 重新提取并人工检查 alpha outline、alpha bounds、fit 指标和 texture origin；回归直接解码最终 WebP 的透明通道，不能只验证源 PNG 或尺寸。
 4. 为动物设置物理参数和允许角度。
 5. 运行全部几何、Matter 分解和碰撞回归测试。
 6. 打开 physics debug，在多个角度检查平台接触、动物接触和旋转原点。
@@ -161,7 +165,7 @@ AI 不会：
 
 因此 AI 做出次优或失败落点属于当前能力边界，但越界角度、非法位置或跳过物理属于缺陷。纯 planner 在相同单次 seed 和相同快照下必须一致；状态式 `StackingAI` 会在每次调用后推进 PRNG，完整复现还要求相同 PRNG 状态和调用顺序。
 
-玩家的水平预览边界按旋转后的真实碰撞轮廓计算。AI 当前以 decision `x` 为显示矩形中心做半宽裁剪，但真实 sprite/body 使用非 `0.5` 的 `textureOrigin`；因此即使两者都以 `x = 34…356` 为数值场地，AI 的真实碰撞轮廓仍不保证完全留在范围内。当前数据中，兔子旋转 `-90°` 时的最坏计算约可越界 `3.3` 逻辑像素。这是已知合法性缺口，不是预期的难度差异；统一算法时必须同时回归 AI 合法性与成功率。
+玩家按旋转后的真实碰撞轮廓裁剪预览中心；AI 以旋转后的显示矩形裁剪 decision `x`。两者的预览中心在释放时都通过 `collisionOriginFromPreviewCenter` 转换到实际物理原点，补偿非中心 `textureOrigin`。旧文档的兔子 `-90°` 越界约 `3.3px` 结论已过时。AI 边界回归用十五种动物、两侧极端支撑和多个 seed 检查最终轮廓是否合法。
 
 ## 8. 随机性边界
 
@@ -185,8 +189,8 @@ AI 不会：
 - 当前支持边界为至少 `320 × 568` 的竖屏视口；CSS 只硬性声明最小宽度 `320px`，低于 `568px` 的竖屏高度尚未保证控制区不裁切。
 - 顶部和底部使用 `safe-area-inset-*`，避免刘海和 Home Indicator 遮挡。
 - 游戏区域设置 `touch-action: none`，页面本身禁止滚动和回弹。
-- 移动设备横屏且视口高度不超过 `520px`、宽度不超过 `940px` 时，显示“请竖屏游玩”。横屏不是完整玩法布局。
-- 旋转按钮至少 `62 × 62` CSS 像素，投放按钮至少 `118 × 62`；暂停按钮为 `44 × 44`。
+- 移动设备横屏且视口高度不超过 `520px`、宽度不超过 `940px` 时，显示“请竖屏游玩”，冻结 Matter、AI timer/Tween 和玩法输入。横屏不是完整玩法布局。
+- 底部有左右移动、左右旋转和投放五个 DOM 控件；窄屏移动/旋转按钮宽 `44px`，主按钮宽度随可用空间变化，暂停按钮为 `44 × 44`。
 
 ### 可访问性
 
@@ -195,9 +199,8 @@ AI 不会：
 - 暂停、重开、错误和结果使用 dialog/alertdialog 语义。
 - `prefers-reduced-motion: reduce` 时将非必要动画和 transition 压缩到近零。
 - Canvas 内部动物本身没有完整的屏幕阅读器操作替代；这是当前已知限制，不能宣称完整无障碍支持。
-- 页面 viewport 当前包含 `user-scalable=no`；这是低视力访问的已知缺口，不应作为长期产品要求保留。
-- 模态当前没有完整 focus trap、背景 `inert` 或关闭后的焦点恢复；ARIA 声明不等于完整模态交互。
-- 短横屏竖屏提示当前只遮住画面，不会自动暂停物理或 AI；恢复竖屏前仍需避免后台状态继续推进。
+- 页面允许浏览器缩放；移动、旋转 DOM 控件支持指针、键盘按住和辅助技术触发的 click。
+- 模态使用统一的 focus trap、背景 `inert` 和关闭后焦点恢复。图鉴或重开确认中的 `P/Esc` 返回设置，保持暂停。
 
 ### 浏览器目标
 
@@ -234,7 +237,9 @@ AI 不会：
 - 当前本机链接的 Vercel 项目使用 Node 24.x，但 `.vercel/` 被 `.gitignore` 排除，不能把本机项目设置当作仓库中可复现的配置合同。
 - Vite 构建目标为 ES2022，输出 `dist/`，当前关闭 production sourcemap。
 - 运行资源使用 `/assets/game/...` 绝对根路径；当前适合部署在域名根目录。若未来部署到子路径，必须同步配置 Vite `base`、资源 URL 和路由验证。
-- 当前没有 `vercel.json`、GitHub Actions、lint、覆盖率门槛或部署后自动 smoke test。Vercel Preview/Production 依赖 Dashboard 的 Git 集成和人工验收。
+- `.github/workflows/quality.yml` 使用 Node 24，在 PR 和 `main` push 时执行 frozen install、类型检查、单元测试、构建体积预算、Chromium / WebKit 的开发及生产构建回归。工作流在提交并推送后才会在远端执行。
+- 当前没有 `vercel.json`、lint、覆盖率门槛或部署后自动 smoke test。Vercel Preview/Production 仍依赖 Dashboard 的 Git 集成和实际部署验收。
+- 构建硬性预算为全部 JavaScript gzip 总量 `480,000` 字节、CSS gzip 总量 `12,000` 字节、游戏图片总量 `3,000,000` 字节。预算约束体积增长，不代表已经测得真实设备的启动性能或帧率。
 - 当前没有客户端路由。若未来加入 SPA 路由，需要明确 deep-link rewrite，否则直接打开子路由可能返回 404。
 - `VITE_ENABLE_TEST_API` 在 Production 环境必须未设置或不等于 `true`。
 
@@ -251,19 +256,16 @@ AI 不会：
 - AI 只有启发式单步选择，没有 Matter rollout、难度档或自适应策略。
 - 当前有十五只动物，没有独立的内容配置工具。
 - 没有存档、排行榜、账号、联网、PWA 或静音；设置仅覆盖语言、玩家代表动物和辅助线。
-- 自动化测试覆盖纯规则、AI、十五只动物几何、全部动物推荐姿态与合法离散角度的平地休眠、兔子近直立稳定性、代表性乌龟/小熊物理堆叠，以及四层木制塔被连续撞醒后重新休眠；尚未覆盖所有动物组合、所有连续角度和长时间高塔。
-- 项目目前没有 Playwright 端到端测试依赖；触屏、键盘、暂停、旋转屏幕和生产页面仍依靠手动浏览器验收。
-- alpha 回归从源 PNG 读取像素，但对最终 WebP 只核对尺寸；WebP 尺寸不变而透明通道损坏时可能漏报。
+- 自动化测试覆盖纯规则、AI、十五只动物几何、全部动物推荐姿态与合法离散角度的平地休眠、兔子近直立稳定性、代表性乌龟/小熊物理堆叠、四层木制塔被连续撞醒后重新休眠，以及六组斜向动物互撞的反弹、休眠和十秒观察回归。物理测试与浏览器使用同一固定步长；尚未覆盖所有动物组合、所有连续角度和长时间高塔。
+- Playwright 覆盖 Chromium / WebKit 的长暂停、AI、键盘和指针控件、弹窗焦点、横屏冻结、资源 404/超时、启动恢复、延迟掉落和响应式边界；生产构建另测回合、暂停、重开和测试 API 隔离。真实手机触摸、GPU 和安全区仍需手测。
+- alpha 回归直接解码最终交付 WebP，同时保留源 PNG 裁剪比例检查。
 - Matter 测试辅助引用 Phaser 包内的 Matter/poly-decomp 路径；升级已精确锁定的 Phaser `4.2.1` 时，需要先验证测试辅助仍对应运行时实现。
-- AI 单元测试只覆盖纯规划器，不覆盖 Scene timer、Tween、暂停恢复和重开取消旧 AI 工作。
-- 核心测试尚未直接覆盖 `isOutOfPlay`、`canActorAim`、`unattributed-fall`，也没有把默认稳定阈值作为独立合同测试。
-- 当前主 JavaScript bundle 约 `1.64MB`（gzip 约 `441KB`）；构建会提示大 chunk，但尚未设硬性性能预算。
+- AI 单元测试覆盖规划与轮廓边界；Scene 的 timer/Tween 暂停恢复和重开取消由浏览器回归验证。
+- 核心测试覆盖出界边界、瞄准权限、延迟责任与默认稳定阈值；不代表穷举所有并发输入时序。
+- Phaser 仍形成较大的主 JavaScript chunk；构建会提示该 warning，并另行执行硬性体积预算。
 - 当前 production sourcemap 关闭，线上堆栈诊断能力有限。
 - Canvas 内部没有完整的语义化操作替代。
-- Canvas Scene 未显式处理 `pointercancel`；页面失焦会释放持续键盘输入，但没有自动暂停策略。
-- 错误界面只可靠捕获同步 bridge mount 异常；没有 Phaser 资源加载失败监听，Scene 不存在时的 `restart` 命令也不能重新创建实例。
-- 出界与稳定只在 `dropping/settling` 采样；旧 body 若在 `aiming/thinking` 才出界，可能延迟到下一次投放并被错误归责。
-- AI 的显示矩形中心裁剪没有补偿非中心 `textureOrigin`，真实碰撞轮廓可能轻微越过水平场地边界。
+- Phaser 将 Canvas 触摸取消转换为 `pointerup`，Scene 据此清除拖动状态；DOM 按钮另外处理 `pointercancel` 和指针捕获丢失。窗口失焦释放持续输入，产品没有单独的切后台暂停菜单。
 
 已知限制不能在发布说明中写成已完成能力。任何扩展都应先更新[产品要求](./PRODUCT_REQUIREMENTS.md)和[发布检查清单](./RELEASE_CHECKLIST.md)。
 
